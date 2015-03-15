@@ -1,0 +1,23 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   m_arg_1b
+## Author       :   Bradley Atkins
+## Description  :   Confirm two vars are inherited from parent
+##                  suite
+## Date         :   17/12/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## M_JOB_HOST
+## M_GREP_PATTERN "^[[:alnum:]]+: |^/.*: |error|info|warning"
+##
+##############################################################
+SCRIPT_NAME=m_arg_1b
+
+echo "MSV1 = ${MSV1}"
+echo "MSV2 = ${MSV2}"
+[[ ${MSV1} == "v1" ]] || m_fail 2 "Error: MSV1 Failed validation (${SCRIPT_NAME})" 
+[[ ${MSV2} == "v2" ]] || m_fail 2 "Error: MSV2 Failed validation (${SCRIPT_NAME})" 

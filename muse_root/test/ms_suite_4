@@ -1,0 +1,14 @@
+##############################################################
+##
+## Name         :   ms_suite_4
+## Author       :   Bradley Atkins
+## Description  :   Dev suite for suite parsing functions.
+##                  Two background plugins, with WAIT
+## Date         :   09/05/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+m_plugin_1 m_plugin_2 WAIT

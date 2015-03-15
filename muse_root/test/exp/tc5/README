@@ -1,0 +1,129 @@
+#======================================
+# Test suite for suite expansion by 
+# run host entries in an rh= file
+#======================================
+
+Command line:
+muse 'ms_tc5_l1(-v rh="/opt/mailcontrol/.muse_dev/exp/tc5/file1") BG'
+
+Test produces three processed object suites in M_MS_OBJ
+ms_tc1_l1 contains a reference to run host file "file1"
+This host file expands to 3 x M_RUN_HOST entries in suite.
+Plugin m_tc1_pl1 uses M_RUN_HOST as M_JOB_HOST
+
+The reference to the runhost file in m_tc5_l1 is changed to 3 x 
+-v M_RUN_HOST variables and 3 x background instances of 
+ms_tc5_l1 are created in ms_cmd_line. Suite ms_tc5_l1 is copied
+3 times as well because parent suite is triplicated
+
+Files:
+/tmp/ms_obj/ms_cmd_line
+/tmp/ms_obj/ms_tc5_l1_12674
+/tmp/ms_obj/ms_tc5_l1_15514
+/tmp/ms_obj/ms_tc5_l1_6088
+/tmp/ms_obj/ms_tc5_l2_1082
+/tmp/ms_obj/ms_tc5_l2_12337
+/tmp/ms_obj/ms_tc5_l2_22146
+
+Content:
+
+ms_tc5_l1_6088( -v M_RUN_HOST="dev01o") ms_tc5_l1_15514( -v M_RUN_HOST="dev01o") ms_tc5_l1_12674( -v M_RUN_HOST="dev01o") BG
+
+##############################################################
+##
+## Name         :   ms_tc5_l1_12674
+## Author       :   Bradley Atkins
+## Description  :   Single suite on line expands to 3 consecutive
+##                  suites because of run host file
+## Date         :   21/02/2015
+## Args         :
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ ms_tc5_l2_22146(-v VAR="String_l2")
+##############################################################
+##
+## Name         :   ms_tc5_l1_15514
+## Author       :   Bradley Atkins
+## Description  :   Single suite on line expands to 3 consecutive
+##                  suites because of run host file
+## Date         :   21/02/2015
+## Args         :
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ ms_tc5_l2_1082(-v VAR="String_l2")
+##############################################################
+##
+## Name         :   ms_tc5_l1_6088
+## Author       :   Bradley Atkins
+## Description  :   Single suite on line expands to 3 consecutive
+##                  suites because of run host file
+## Date         :   21/02/2015
+## Args         :
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ ms_tc5_l2_12337(-v VAR="String_l2")
+##############################################################
+##
+## Name         :   ms_tc5_l2_1082
+## Author       :   Bradley Atkins
+## Description  :   Called from ms_tc5_l1
+## Date         :   21/02/2015
+## Args         :
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ m_tc5_pl1(-v VAR="String_l3")
+##############################################################
+##
+## Name         :   ms_tc5_l2_12337
+## Author       :   Bradley Atkins
+## Description  :   Called from ms_tc5_l1
+## Date         :   21/02/2015
+## Args         :
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ m_tc5_pl1(-v VAR="String_l3")
+##############################################################
+##
+## Name         :   ms_tc5_l2_22146
+## Author       :   Bradley Atkins
+## Description  :   Called from ms_tc5_l1
+## Date         :   21/02/2015
+## Args         :
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ m_tc5_pl1(-v VAR="String_l3")
+
+Master Output:
+
+====================================================================================
+ Status             : Commencing MUSE run
+ Start              : Sat Feb 21 13:57:16 GMT 2015
+ Master             : dev01o.30.test.blackspider.com
+ User Tag           : wibble
+ Sys  Tag           : 150221135712
+====================================================================================
+ (1)   13:57:31: - m_tc5_pl1                                                (dev01o)
+ (2)   13:57:31: - m_tc5_pl1                                                (dev01o)
+ (3)   13:57:32: - m_tc5_pl1                                                (dev01o)
+====================================================================================
+ Status             : Clean run. No problems reported.
+ Finish Time        : Sat Feb 21 13:57:49 GMT 2015
+====================================================================================

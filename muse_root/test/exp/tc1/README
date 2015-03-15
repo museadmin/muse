@@ -1,0 +1,67 @@
+#======================================
+# Test suite for suite expansion by 
+# run host entries in an rh= file
+#======================================
+
+Command line:
+muse ms_tc1_l1
+
+Test produces three processed object suites in M_MS_OBJ
+ms_tc1_l1 contains a reference to run host file "file1"
+This host file expands to single M_RUN_HOST entry in suite.
+Plugin m_tc1_pl1 uses M_RUN_HOST as M_JOB_HOST
+
+The reference to the runhost file in m_tc1_l1 is changed to a single
+-v M_RUN_HOST variable and ms_tc1_l2 is only called once
+
+Files:
+ms_cmd_line
+ms_tc1_l1_12195
+ms_tc1_l2_4410
+
+Content:
+ms_tc1_l1_12195
+
+##############################################################
+##
+## Name         :   ms_tc1_l1_12195
+## Author       :   Bradley Atkins
+## Description  :   Single suite on line expands to 3 consecutive
+##                  suites because of run host file
+## Date         :   14/02/2015
+## Args         :
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ms_tc1_l2_4410( -v M_RUN_HOST="dev01o" -v  VAR="String_l2")
+
+##############################################################
+##
+## Name         :   ms_tc1_l2_4410
+## Author       :   Bradley Atkins
+## Description  :   Called from ms_tc1_l1
+## Date         :   14/02/2015
+## Args         :
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ m_tc1_pl1(-v VAR="String_l3")
+
+Master Output:
+
+====================================================================================
+ Status             : Commencing MUSE run
+ Start              : Sat Feb 21 12:43:46 GMT 2015
+ Master             : dev01o.30.test.blackspider.com
+ User Tag           : wibble
+ Sys  Tag           : 150221124343
+====================================================================================
+ (1)   12:43:58: - m_tc1_pl1                                                (dev01o)
+====================================================================================
+ Status             : Clean run. No problems reported.
+ Finish Time        : Sat Feb 21 12:44:13 GMT 2015
+====================================================================================

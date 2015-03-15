@@ -1,0 +1,13 @@
+##############################################################
+##
+## Name         :   ms_tc1_l2
+## Author       :   Bradley Atkins
+## Description  :   Called from ms_tc1_l1
+## Date         :   14/02/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+m_tc1_pl1(-v VAR="String_l3")

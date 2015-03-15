@@ -1,0 +1,13 @@
+##############################################################
+##
+## Name         :   ms_arg_1a
+## Author       :   Bradley Atkins
+## Description  :   Test suite inherits from parent suite
+## Date         :   17/12/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+m_arg_1a m_arg_1b

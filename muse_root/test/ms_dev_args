@@ -1,0 +1,37 @@
+##############################################################
+##
+## Name         :   ms_arg_tests
+## Author       :   Bradley Atkins
+## Description  :   Unit tests for MUSE variable scope control
+## Date         :   23/11/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+#======================================
+# Test special var M_RUN_HOST. External
+# harness will be required to test set
+# from command line
+#======================================
+m_test_run_host_1(-v M_RUN_HOST="cds01o") 
+#m_test_run_host_2(-v rf="/opt/mailcontrol/.muse_dev/ut.run") 
+m_test_run_host_2(-v FILE="/opt/mailcontrol/.muse_dev/ut.run") 
+
+#======================================
+# Inheritance and scope control tests
+#======================================
+
+#======================================
+# All children of top level suite inherit
+# all variables
+#======================================
+ms_arg_1(-v MSV1="v1" -v MSV2="v2")
+
+#======================================
+# Suite override is contained in scope
+#======================================
+ms_arg_2(-v MSV1="v1" -v MSV2="v2")
+
+
