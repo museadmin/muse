@@ -1,0 +1,13 @@
+
+Keys -
+
+musemsg
+musemsg.pub
+
+Public key is used to replace key in ldap
+private key is installed in the $HOME/.ssh directory for museslave
+by the installer / package
+
+This should enable the slave to use the msg service 
+
+

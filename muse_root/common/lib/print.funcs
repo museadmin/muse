@@ -1,0 +1,271 @@
+##############################################################
+##
+## Name         :   m_print_marker
+## Author       :   Bradley Atkins
+## Description  :   Print a standard marker to stdout. This is 
+##                  used to deliniate sections of output for 
+##                  post processing.
+## Date         :   19/08/2012
+## Args         :   1 - A single recognised valid marker char
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_print_marker()
+{
+    [[ $# -eq 1 ]] || m_fail 1 "Error: Usage args (${FUNCNAME})"
+
+    case ${1} in
+        "+") printf "%s\n" "${C_PLUS}";;
+        "-") printf "%s\n" "${C_MINUS}";;
+        "_") printf "%s\n" "${C_USCORE}";;
+        "=") printf "%s\n" "${C_EQUALS}";;      ## EXCLUSION MARKER
+        ".") printf "%s\n" "${C_EVIDENCE}";;    ## Evidence Marker
+        "@") printf "%s\n" "${C_ERROR}";;       ## Error Marker
+
+        *) m_fail 1 "Unexpected char passed (${1}) (${FUNCNAME})";;
+    esac
+}
+##############################################################
+##
+## Name         :   m_print_master_header
+## Author       :   Bradley Atkins
+## Description  :   Print a header for the master stdout
+## Date         :   29/09/2012
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_print_master_header()
+{
+    [[ -n ${M_MAIN_SCREEN_HEAD} ]] || m_fail 3 "Error: Run screen header not set (${FUNCNAME})" 
+
+    {
+        printf "%-${M_STATUS_OFFSET}s%s\n" "${C_BREAK}"
+        printf "%-${M_STATUS_OFFSET}s%s\n" " Status" ": Commencing MUSE run"
+        printf "%-${M_STATUS_OFFSET}s%s\n" " Start" ": $(date)"
+        printf "%-${M_STATUS_OFFSET}s%s\n" " Master" ": ${M_MASTER_HOST}"
+        printf "%-${M_STATUS_OFFSET}s%s\n" " User Tag" ": ${M_USR_TAG}"
+        printf "%-${M_STATUS_OFFSET}s%s\n" " Sys  Tag" ": $(echo ${M_SYS_TAG} | sed 's/^[.]//g')"
+        printf "%s\n" "${C_BREAK}"
+    
+    } > "${M_MAIN_SCREEN_HEAD}"
+}
+##############################################################
+##
+## Name         :   m_print_master_footer
+## Author       :   Bradley Atkins
+## Description  :   Print a footer for the master stdout
+## Date         :   29/09/2012
+## Args         :   
+## Status       :   Reviewed    [n]
+##              Tested      [n]
+##              Released    [n]
+##############################################################
+m_print_master_footer()
+{
+    printf "%s\n" "${C_BREAK}"
+    if [[ ${M_TOTAL_FAILURES} -gt 0 ]]
+    then
+        printf "${M_CLR_NOT_OK}%-20s%s${C_CLEAR}\n" " Status" ": Completed WITH (${M_TOTAL_FAILURES}) problems"
+    else
+        printf "${M_CLR_OK}%-20s%s${C_CLEAR}\n" " Status" ": Clean run. No problems reported."
+    fi
+
+    printf "%-20s%s\n" " Finish Time" ": $(date)"
+    printf "%s\n" "${C_BREAK}"
+}
+##############################################################
+##
+## Name         :   m_print_run_footer
+## Author       :   Bradley Atkins
+## Description  :   Footer for run time master screen
+## Date         :   20/07/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_print_run_footer()
+{
+    local SLAVE="Slaves"
+    [[ ${M_SLAVE_TALLY} -eq 1  ]] && SLAVE="Slave"
+
+    printf "%s\n" "${C_BREAK}"
+    
+    if m_read_state "MUSE_READY_TO_RUN"
+    then
+        printf "${M_CLR_OK}%-${M_STATUS_OFFSET}s%s${C_CLEAR}\n" " Master Status" ": OK"
+    else
+        printf "${M_CLR_NOT_OK}%-${M_STATUS_OFFSET}s%s${C_CLEAR}\n" " Master Status" ": NOT OK"
+    fi
+    
+    if m_read_state "SLAVES_REGISTERED"
+    then
+        printf "${M_CLR_OK}%-${M_STATUS_OFFSET}s%s${C_CLEAR}\n" " Slave  Status" ": ${M_SLAVE_TALLY} ${SLAVE} Registered"
+    else
+        printf "${M_CLR_NOT_OK}%-${M_STATUS_OFFSET}s%s${C_CLEAR}\n" " Slave  Status" ": Waiting for Slave Registration"
+    fi
+
+    if m_read_state "COMMS_OK"
+    then
+        printf "${M_CLR_OK}%-${M_STATUS_OFFSET}s%s${C_CLEAR}\n" " CNXN  Status" ": OPEN   - ${M_OPEN_CNXNS}"
+        printf "${M_CLR_OK}%-${M_STATUS_OFFSET}s%s${C_CLEAR}\n" " " ": CLOSED - ${M_CLOSED_CNXNS}"
+    else
+        printf "${M_CLR_NOT_OK}%-${M_STATUS_OFFSET}s%s${C_CLEAR}\n" " CNXN  Status" ": OPEN   - ${M_OPEN_CNXNS}"
+        printf "${M_CLR_NOT_OK}%-${M_STATUS_OFFSET}s%s${C_CLEAR}\n" " " ": CLOSED - ${M_CLOSED_CNXNS}"
+    fi
+   
+   printf "%s\n" "${C_BREAK}"
+} > "${M_MAIN_SCREEN_FOOT}"
+##############################################################
+##
+## Name         :   m_update_run_screen_body
+## Author       :   Bradley Atkins
+## Description  :   Update the clr for a plugin status line
+## Date         :   20/07/2014
+## Args         :   1 - Line No
+##                  2 - Colour
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_update_run_screen_body()
+{
+    [[ $# -eq 2 ]] || m_fail 3 "Error: Usage. Arg count. 2 expected (${FUNCNAME})" 
+    [[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 3 "Error: Usage. Args [1]. (${1}) Integer expected (${FUNCNAME})"
+    [[ -n ${2} ]] || m_fail 3 "Error: Usage. Args [2]. Non empty string expected (${FUNCNAME})" 
+
+    local LINE TMPFILE1 TMPFILE2 LCNT
+    m_get_tmp_file ${FUNCNAME}_1 TOP
+    m_get_tmp_file ${FUNCNAME}_2 BOTTOM
+    :>"${TOP}"
+    :>"${BOTTOM}"
+
+    #======================================
+    # Split the screen file around the line
+    #======================================
+    LCNT=$(wc -l "${M_MAIN_SCREEN_BODY}" | cut -d" " -f 1)
+    [[ ${LCNT} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Failed to recover line count from screen body (${FUNCNAME})" 
+
+    if [[ ${1} -eq 1 ]]
+    then
+        sed '1d' "${M_MAIN_SCREEN_BODY}" > "${BOTTOM}"
+    elif [[ ${1} -eq ${LCNT} ]]
+    then
+        sed ''${LCNT}'d' "${M_MAIN_SCREEN_BODY}" > "${TOP}"
+    else
+        sed -n '1,'$(( ${1} - 1 ))'p' "${M_MAIN_SCREEN_BODY}" > "${TOP}" || m_fail 3 "Error: SED failed (1) for line (${1}) (${FUNCNAME})" 
+        sed -n ''$(( ${1} + 1 ))',$p' "${M_MAIN_SCREEN_BODY}" > "${BOTTOM}" || m_fail 3 "Error: SED failed (2) for line (${1}) (${FUNCNAME})" 
+    fi
+
+    #======================================
+    # Pick up line to edit colour
+    #======================================
+    LINE=$(sed -n ''${1}'p' "${M_MAIN_SCREEN_BODY}")
+    [[ -n ${LINE} ]] || m_fail 2 "Error: Failed to recover line (${1}) from screen file (${M_MAIN_SCREEN_BODY}) (${FUNCNAME})" 
+
+    #======================================
+    # Change the line colour
+    #======================================
+    printf "${2}%s${C_CLEAR}\n" "$(printf "%s" "${LINE}" | sed -r 's/'$(echo -e "\033")'\[[0-9]{1,2}(;([0-9]{1,2})?)?[mK]//g')" >> "${TOP}"
+
+    #======================================
+    # Reassemble the screen file
+    #======================================
+    cp "${TOP}" "${M_MAIN_SCREEN_BODY}" || m_fail 2 "Error: Copy failed (${FUNCNAME})" 
+    cat "${BOTTOM}" >> "${M_MAIN_SCREEN_BODY}" || m_fail 2 "Error: Cat failed (${FUNCNAME})" 
+
+}
+
+##############################################################
+##
+## Name         :   m_print_error_footer
+## Author       :   Bradley Atkins
+## Description  :   Print a footer for the main screen to show
+##                  failure message
+## Date         :   27/05/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_print_error_footer()
+{
+    printf "%s\n" "${C_BREAK}"
+    printf "%s\n" " Finish: $(date)"
+    printf "\t\t%s\n" " EARLY EXIT DUE TO FAILURE"
+    printf "%s\n" "${M_LAST_FAIL_MSG}"
+    printf "%s\n" "${C_BREAK}"
+}
+##############################################################
+##
+## Name         :   m_print_results_header
+## Author       :   Bradley Atkins
+## Description  :   Print a header for a results file
+## Date         :   25/08/2012
+## Args         :   1 - Job Name
+##                  2 - Job Start Time
+##                  3 - Master Hostname
+##                  4 - Slave Hostname
+##                  5 - User Tag
+##                  6 - Sys Tag
+##                  7 - Output
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_print_results_header()
+{
+    {
+        printf "%s\n" "${C_BREAK}"
+        printf "%-15s%-5c%s\n" " Job:" "-" "${1}"
+        printf "%-15s%-5c%s\n" " Start:" "-" "${2}"
+        printf "%-15s%-5c%s\n" " Master:" "-" "${3}"
+        printf "%-15s%-5c%s\n" " Slave:" "-" "${4}"
+        printf "%-15s%-5c%s\n" " User Tag:" "-" "${5}"
+        printf "%-15s%-5c%s\n" " Sys  Tag:" "-" "${6}"
+        printf "%s\n" "${C_BREAK}"
+    } >>"${7}"
+}
+##############################################################
+##
+## Name         :   m_print_results_trailer
+## Author       :   Bradley Atkins
+## Description  :   Print a trailer for a results file
+## Date         :   25/08/2012
+## Args         :   1 - Finish time
+##                  2 - Output
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_print_results_trailer()
+{
+    {
+        printf "%s\n" "${C_BREAK}"
+        printf "%-15s%-5c%s\n" " Finish:" "-" "${1}"
+        printf "%s\n" "${C_BREAK}"
+    } >>"${2}"
+}
+##############################################################
+##
+## Name         :   m_print_headed_line
+## Author       :   Bradley Atkins
+## Description  :   Print a line between header lines
+## Date         :   17/04/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_print_headed_line()
+{
+    [[ $# -eq 1 ]] || m_fail 1 "Error: Usage args (${FUNCNAME})"
+
+    printf "%s\n" "${C_BREAK}"
+    printf "%s\n" "${1}"
+    printf "%s\n" "${C_BREAK}"
+
+}

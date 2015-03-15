@@ -1,0 +1,14 @@
+##############################################################
+##
+## Name         :   ms_demo_hello
+## Author       :   Bradley Atkins
+## Description  :   Demo a suite of plugins running 4 languages
+## Date         :   26/07/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_hello_from_world_of_java
+m_hello_from_world_of_python
+

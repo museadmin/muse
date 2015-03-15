@@ -1,0 +1,29 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   utlis.funcs
+## Author       :   Bradley Atkins
+## Description  :   Common utility functions for muse components
+## Date         :   25/08/2013
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+##############################################################
+##
+## Name         :   trim
+## Author       :   Bradley Atkins
+## Description  :   Trim the leading and trailing white space 
+##                  from a variable. Use trim <variable>
+## Date         :   25/08/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+trim()
+{
+    read -rd '' $1 <<<"${!1}"
+}
+

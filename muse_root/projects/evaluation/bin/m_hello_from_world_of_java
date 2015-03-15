@@ -1,0 +1,24 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   m_hello_from_world_of_java
+## Author       :   Bradley Atkins
+## Description  :   Demo plugin to show MUSE running JAVA
+## Date         :   26/07/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## M_JOB_HOST CDS
+## M_GREP_PATTERN "^[[:alnum:]]+: |^/.*: |error|info|warning"
+##
+##############################################################
+SCRIPT_NAME=m_hello_from_world_of_java
+
+m_find_file HelloFromjava.jar HELLO || m_fail 1 "Error: Call to m_find_file failed.  (${FUNCNAME})" 
+
+/usr/java/latest/bin/java -jar "${HELLO}" || m_fail 1 "Error: Call to HelloFromjava.jar failed (${SCRIPT_NAME})" 
+
+
+

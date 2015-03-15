@@ -1,0 +1,62 @@
+##############################################################
+##
+## Name         :   plugin.funcs
+## Author       :   Bradley Atkins
+## Description  :   Common functions for MUSE plugins
+## Date         :   22/06/2014
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+##############################################################
+##
+## Name         :   m_fail
+## Author       :   Bradley Atkins
+## Description  :   Handle a failure for a plugin. Set an 
+##                  action for slave state machine and exit
+## Date         :   22/06/2014
+## Args         :   1 - Fail level
+##                  2 - Failure msg
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_fail()
+{
+    #======================================
+    # If called with wrong args then exit
+    #======================================
+    [[ $# -eq 2 ]] || exec "${M_EXEC_FAILURE}"
+
+    #======================================
+    # Write the error to the log
+    #======================================
+    m_log_msg "${2}" "ERROR"
+    #======================================
+    # Echo to stdout for master report parser
+    #======================================
+    echo "${2} Error Level (${1})"
+
+    #======================================
+    # Test the error level
+    #======================================
+    case ${1} in
+        1) 
+           #======================================
+           # Not a fatal error
+           #======================================
+           echo "HANDLE_NON_FATAL_ERROR|${2}" > "${PLUGIN_CTL}" 
+           exec "${M_EXEC_FAILURE}"
+           ;;
+        *) 
+           #======================================
+           # Fatal error. 
+           #======================================
+           echo "HANDLE_FATAL_ERROR|${2}" > "${PLUGIN_CTL}" 
+           exec "${M_EXEC_FAILURE}"
+           ;;
+    esac
+
+}
+

@@ -1,0 +1,23 @@
+#! /bin/bash
+##############################################################
+##
+## Name		:	m_hostname
+## Author	:	Bradley Atkins
+## Description	:	test script for dev
+## Date		:	04/08/2012
+## Args		:	
+## Status	:	Reviewed 	[n]
+##			Tested 		[n]
+##			Released 	[n]
+##
+## M_JOB_HOST 
+## M_GREP_PATTERN "^[[:alnum:]]+: |error|info|warning"
+##
+##############################################################
+SCRIPT_NAME=m_grep_ssh
+
+m_print_marker ${C_EVIDENCE_MARKER}
+
+echo "Host = $(hostname)"
+
+m_print_marker ${C_EVIDENCE_MARKER}

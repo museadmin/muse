@@ -1,0 +1,285 @@
+##############################################################
+##
+## Name             :   sm.funcs
+## Author           :   Bradley Atkins
+## Description      :   Control functions for state machine
+## Date             :   21/07/2013
+## Status           :   Reviewed        [n]
+##                              Tested          [n]
+##                              Released        [n]
+##############################################################
+
+##############################################################
+##
+## Name             :   m_enable_put
+## Author           :   Bradley Atkins
+## Description      :   Enable the processing of user tasks
+## Date             :   21/07/2013
+## Args             :   -
+## Status           :   Reviewed        [n]
+##                              Tested          [n]
+##                              Released        [n]
+##############################################################
+m_enable_put()
+{
+    M_PROCESS_USER_TASKS=0
+}
+##############################################################
+##
+## Name             :   m_disable_put
+## Author           :   Bradley Atkins
+## Description  :       Disable the processing of user tasks
+## Date             :   21/07/2013
+## Args             :   -
+## Status           :   Reviewed        [n]
+##                              Tested          [n]
+##                              Released        [n]
+##############################################################
+m_disable_put()
+{
+    M_PROCESS_USER_TASKS=1
+}
+##############################################################
+##
+## Name             :   m_process_user_tasks
+## Author           :   Bradley Atkins
+## Description  :       Return state of flag for process user tasks
+## Date             :   21/07/2013
+## Args         :       
+## Status           :   Reviewed        [n]
+##                              Tested          [n]
+##                              Released        [n]
+##############################################################
+m_process_user_tasks()
+{
+    return ${M_PROCESS_USER_TASKS}
+}
+##############################################################
+##
+## Name             :   m_enable_pst
+## Author           :   Bradley Atkins
+## Description  :       Enable the processing of system tasks
+## Date             :   21/07/2013
+## Args             :   -
+## Status           :   Reviewed        [n]
+##                              Tested          [n]
+##                              Released        [n]
+##############################################################
+m_enable_pst()
+{
+    M_PROCESS_SYSTEM_TASKS=0
+}
+##############################################################
+##
+## Name             :   m_disable_pst
+## Author           :   Bradley Atkins
+## Description  :       Disable the processing of system tasks
+## Date             :   21/07/2013
+## Args             :   -
+## Status           :   Reviewed        [n]
+##                              Tested          [n]
+##                              Released        [n]
+##############################################################
+m_disable_pst()
+{
+    M_PROCESS_SYSTEM_TASKS=1
+}
+##############################################################
+##
+## Name             :   m_process_system_tasks
+## Author           :   Bradley Atkins
+## Description  :       Return state of flag for process system tasks
+## Date             :   21/07/2013
+## Args         :       
+## Status           :   Reviewed        [n]
+##                              Tested          [n]
+##                              Released        [n]
+##############################################################
+m_process_system_tasks()
+{
+    return ${M_PROCESS_SYSTEM_TASKS}
+}
+##############################################################
+##
+## Name         :       m_write_state
+## Author       :       Bradley Atkins
+## Description  :       Write a state to the state file
+## Date         :       02/08/2013
+## Args         :       1 - STATE (TRUE | FALSE)
+##                      2 - DISPOSITION
+## Status       :       Reviewed        [n]
+##                      Tested          [n]
+##                      Released        [n]
+##############################################################
+m_write_state()
+{
+    [[ $# -eq 2 ]] || m_fail 2 "Error: Usage args. ($*) 2 expected (${FUNCNAME})"
+    [[ (${1} == "TRUE") || (${1} == "FALSE") ]] || m_fail 2 "Error: Usage args [1]. (${1}) TRUE or FALSE expected (${FUNCNAME})" 
+    [[ ${2} =~ ^[0-9A-Z_]+$ ]] || m_fail 2 "Error: Usage args [2]. Capitalized String expected (${FUNCNAME})" 
+    local STATE=1
+    [[ ${1} == "TRUE" ]] && STATE=0
+    
+    #======================================
+    # Write
+    #======================================
+    m_set_state "${2}" ${STATE} 
+}
+##############################################################
+##
+## Name         :   m_read_state
+## Author       :   Bradley Atkins
+## Description  :   Read the state of the flag from the 
+##                  state table. Return true if TRUE etc
+## Date         :   19/07/2013
+## Args         :   1 - Flag
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_read_state()
+{
+    [[ $# -eq 1 ]] || m_fail 2 "Error: Usage arg count (${FUNCNAME})"
+    [[ ${1} =~ ^[0-9A-Z_]+$ ]] || m_fail 2 "Error: Usage args [1]. Capitalized String expected (${FUNCNAME})" 
+    local VAR=
+
+    #======================================
+    ## Read the state from the table
+    ##======================================
+    m_get_state "${1}" VAR
+    [[ (${VAR} -eq 0) || (${VAR} -eq 1) ]] || m_fail 1 "Error: Failed to retrieve state for (${1}) (${FUNCNAME})" 
+
+    return ${VAR}
+}
+##############################################################
+##
+## Name         :   m_write_action
+## Author       :   Bradley Atkins
+## Description  :   Write to the action file. File contains 3
+##                  columns - PERMS|STATUS|ACTION
+##                  PERMS +w or -w (-w for permanent actions)
+##                  STATUS - ACT or SKIP
+##                  ACTION - Flag for the state machine
+## Date         :   18/07/2013
+## Args         :   1 - STATUS
+##                  2 - ACTION (Action to change status)
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_write_action()
+{
+    [[ $# -eq 2 ]] || m_fail 1 "Error: Usage args (${FUNCNAME})"
+    [[ (${1} == "SKIP") || (${1} == "ACT") ]] || m_fail 2 "Error: Action (${1}) not recognised (${FUNCNAME})" 
+    [[ ${2} =~ ^[0-9A-Z_]+$ ]] || m_fail 2 "Error: Action name (${2}) format. (${FUNCNAME})" 
+    
+    #======================================
+    # Update the action in the master db
+    #======================================
+    m_set_action "${2}" "${1}" 
+}
+##############################################################
+##
+## Name         :   m_get_running_jobs
+## Author       :   Bradley Atkins
+## Description  :   Retrun the first job found that is running
+## Date         :   26/05/2014
+## Args         :   1 - Var to return the job details
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_running_jobs()
+{
+    [[ $# -eq 1 ]] || m_fail 2 "Error: Usage. Arg count. 1 expected (${FUNCNAME})" 
+    [[ ${1} =~ ^[0-9A-Z_]+$ ]] || m_fail 2 "Error: Usage. Args[1]. MUSE variable name expected. (${FUNCNAME})" 
+    local RUNNING_JOBS
+    m_get_tmp_file ${FUNCNAME} RUNNING_JOBS
+    
+    #======================================
+    # Get all job records with no finish time
+    #======================================
+    m_select_sl3 "select job_id, pid, name, master_exec_id, originating_msg_id from job where finish_time is null and start_time is not null" RUNNING_JOBS
+
+    if [[ -s "${RUNNING_JOBS}" ]]
+    then
+        if [[ $(head -n 1 "${RUNNING_JOBS}" | awk '{print NF}' FS="|") -eq 5 ]]
+        then
+            eval ${1}=\"$(head -n 1 "${RUNNING_JOBS}")\"
+            return 0
+        else
+            m_fail 2 "Error: Incorrect field count for query result ($(head -n 1 ${RUNNING_JOBS})).  (${FUNCNAME})" 
+        fi
+    fi
+
+    return 1
+} 
+##############################################################
+##
+## Name         :   m_read_action
+## Author       :   Bradley Atkins
+## Description  :   Read the action state and return true if ACT
+##                  false if SKIP
+## Date         :   19/07/2013
+## Args         :   1 - STATE
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_read_action()
+{
+
+    [[ $# -eq 1 ]] || m_fail 1 "Error: Usage arg count (${FUNCNAME})"
+    [[ ${1} =~ ^[0-9A-Z_]+$ ]] || m_fail 2 "Error: Action name (${1}) format. (${FUNCNAME})" 
+    local STATE=
+
+    m_get_action_from_state_machine "${1}" STATE
+
+    [[ "${STATE}" =~ ^ACT$|^SKIP$ ]] || m_fail 2 "Error: Action (${STATE}) not recognised for (${1}) (${FUNCNAME})" 
+
+    [[ "${STATE}" == "ACT" ]] && return 0
+
+    return 1
+}
+##############################################################
+##
+## Name         :   m_set_single_action_from_msg_q
+## Author       :   Bradley Atkins
+## Description  :   Set an action flag from the msg q
+## Date         :   07/12/2013
+## Args         :   1 -  msg ID 
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_set_single_action_from_msg_q()
+{
+    #======================================
+    # Setup and validation
+    #======================================
+    [[ ${1} =~ ^[0-9]+$ ]] || m_fail 2 "Error: Msg id validation failed (${FUNCNAME})" 
+    local MSG ACTION
+
+    m_get_msg ${1} MSG "INBOUND"
+    ACTION=$(echo ${MSG} | awk -v action=${C_MSG_ACTION_FLAG_FLD} '{print $action}' FS="|")
+    [[ ${ACTION} =~ ^[0-9A-Z_]+$ ]] || m_fail 2 "Error: Corrupt action (${ACTION}) returned from msg (${1}) (${FUNCNAME})"
+
+    m_update_msgs ${1} "status" "PROCESSED"
+    m_write_action "ACT" "${ACTION}"
+}
+
+##############################################################
+##
+## Name         :   m_set_primary_execution_thread
+## Author       :   Bradley Atkins
+## Description  :   Insert the primary suite id (ms_cmd_line)
+## Date         :   10/05/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_set_primary_execution_thread()
+{
+    m_insert_thread_exec 1
+}
+

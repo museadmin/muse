@@ -1,0 +1,525 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   common.funcs
+## Author       :   Bradley Atkins
+## Description  :   Common functions for all components
+## Date         :   13/12/2013
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+##############################################################
+##
+## Name         :   m_get_md5sum
+## Author       :   Bradley Atkins
+## Description  :   Return the md5sum of a file. Fatal error 
+##                  if not found
+## Date         :   16/05/2014
+## Args         :   1 - File name
+##                  2 - VAR to return md5sum
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_md5sum()
+{
+    [[ $# -eq 2 ]] || m_fail 2 "Error: Usage. Arg count. 2 expected (${FUNCNAME})" 
+    [[ -n ${1} ]] || m_fail 2 "Error: Usage. Args [1]. Non empty string expected (${FUNCNAME})" 
+    [[ ${2} =~ ^[0-9A-Z_]+$ ]] || m_fail 2 "Error: Usage. Args [2]. MUSE variable name expected (${FUNCNAME})" 
+
+    local FILE
+
+    m_find_file ${1} FILE
+
+    eval ${2}=$(md5sum "${FILE}" | cut -d" " -f1)
+}
+
+##############################################################
+##
+## Name         :   m_check_file
+## Author       :   Bradley Atkins
+## Description  :   Check a file's properties
+## Date         :   20/07/2012
+## Args         :   1 - Properties eg -frwx
+##                  2 - fully qualified name
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+##############################################################
+m_check_file()
+{
+    #======================================
+    # Validate our args
+    #======================================
+    [[ $# -eq 2 ]] || m_fail 2 "Error: Usage args. 2 expected (${FUNCNAME})" 
+    [[ -n "${2}" ]] || m_fail 2 "Error: Usage args [2] name expected. (${FUNCNAME})" 
+    [[ "${1}" =~ ^(-[frxwdabcgGhkLNOpsStu]+$) ]] || m_fail 2 "Error: Usage args. Valid option expected. (${FUNCNAME})" 
+
+    for OPTION in $(echo "${1}" | tr -d "-" | sed 's/[.]*/ /g')
+    do
+        if ! eval [[ "-${OPTION}" "${2}" ]]
+        then
+            return 1
+        fi
+    done
+    return 0
+}
+##############################################################
+##
+## Name         :   m_get_file_data
+## Author       :   Bradley Atkins
+## Description  :   Clean the output of the find | ls command
+##                  Cut out the time stamps etc just leaving
+##                  perms owner grp size and path. First two params
+##                  are optional. Complexity arises from requirement to 
+##                  handle files and dirs with escape sequences and spaces
+##                  in the names.
+## Date         :   19/09/2012
+## Args         :   1 - -s Optional Sort by file or directory name
+##                  2 - -d Optional find of directories (Defaults to files)
+##                  3 - -min Optional min depth for find
+##                  4 - -max Optional max depth for find
+##                  5 - Top level directory for find
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_file_data()
+{
+    [[ $# > 7 ]] && m_fail 1 "Error: Usage args (${FUNCNAME})"  
+
+    local SORT="cat" OPT="-l" TYPE="f" MIN_D= MAX_D= 
+
+    while [[ $# > 1 ]]
+    do
+        case ${1} in
+            -s) SORT="sort -k5";;
+            -d) TYPE="d";OPT="-ld";;
+            -min)
+                shift 
+                [[ ${1} =~ ^[[:digit:]]+$ ]] || 
+                    m_fail 1 "Error: Min depth param (${FUNCNAME})" 
+                MIN_D="-mindepth ${1}"
+                ;;
+            -max)
+                shift 
+                [[ ${1} =~ ^[[:digit:]]+$ ]] || 
+                    m_fail 1 "Error: Max depth param (${FUNCNAME})"
+                MAX_D="-maxdepth ${1}"
+                ;;
+            *) m_fail 1 "Error: Unrecognised option (${1}) (${FUNCNAME})";;
+        esac
+        shift
+    done
+
+    [[ -d "${1}" ]] || m_fail 1 "Error: Not a directory (${1}) (${FUNCNAME})" 
+
+    awk '{
+        lo=""
+        for (i = 1; i <= NF; i++){
+            if (i <= 5)
+                if (i != 2)
+                    lo = lo" "$i
+
+            if ($i ~ /\//){
+                sub(/ */, " ", $0)          
+                printf lo" "$0"\n"
+                next
+            }
+            $i = ""
+        }
+    }' <(find "${1}" ${MIN_D} ${MAX_D} -type ${TYPE} | sed 's#\\#\\\\#g' | xargs -i ls ${OPT} "{}") | ${SORT}
+}
+##############################################################
+##
+## Name         :   m_get_usr_tag
+## Author       :   Bradley Atkins
+## Description  :   Get the user tag if set and confirm a 
+##                  viable directory name.
+## Date         :   19/08/2012
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_usr_tag()
+{
+    #======================================
+    # If the file is empty or unreadable
+    # then no tag set so return
+    #======================================
+
+    M_USR_TAG=default
+
+    m_check_file -sr "${M_USR_TAG_FILE}" || return
+
+    [[ $(wc -l "${M_USR_TAG_FILE}" | cut -d" " -f1) -eq 1 ]] || 
+        m_fail 2 "Error: Multi Line tag set (${FUNCNAME})"
+
+    #======================================
+    # It exists so we need to confirm it 
+    # contains a valid unix directory name
+    #======================================
+    local TMP=$(cat "${M_USR_TAG_FILE}")
+    [[ -n "${TMP}" ]] || return 1
+
+    mkdir "/tmp/${TMP}" 2>/dev/null || m_fail 1 "Error: Invalid tag name set (${TMP}) (${FUNCNAME})" 
+    [[ -d "/tmp/${TMP}" ]] || m_fail 1 "Error: failed to catch mkdir failure (${FUNCNAME})" 
+    rm -rf "/tmp/${TMP}" || m_fail 1 "Error: Failed to delete tmp tag directory (${FUNCNAME})" 
+
+    #======================================
+    # Must be valid if we got this far so
+    # set the usr tag
+    #======================================
+    M_USR_TAG="${TMP}"
+}
+##############################################################
+##
+## Name         :   m_log_msg
+## Author       :   Bradley Atkins
+## Description  :   Write a log message
+## Date         :   04/08/2012
+## Args         :   1 - msg
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_log_msg()
+{
+    echo "$(date): ${2}: ${1}" >> "${M_LOG}"
+}
+##############################################################
+##
+## Name         :   m_get_exp_file
+## Author       :   Bradley Atkins
+## Description  :   Create an expected results file with a unique name.
+## Date         :   28/08/2012
+## Args         :   1 - Name of function or script requiring file
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_exp_file()
+{
+    [[ $# -eq 1 ]] || exit 1
+
+    local FILE="${M_NEWEXP}/${1}_${RANDOM}.exp"
+
+    :>"${FILE}" || exit 2
+
+    echo "${FILE}"
+}
+##############################################################
+##
+## Name         :   m_get_unique_tmp_file
+## Author       :   Bradley Atkins
+## Description  :   Create a tmp file with a unique name. Unlike 
+##                  m_get_tmp_file this does not everwrite an 
+##                  existing tmp file but always creates a new one.
+##                  So never call this from the state machine or
+##                  you will rapidly fill the disk.
+## Date         :   15/02/2015
+## Args         :   1 - Name of function or script requiring file
+##                  2 - Name of variable to hold path to file
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_unique_tmp_file()
+{
+    #======================================
+    # Validation
+    #======================================
+    [[ $# -eq 2 ]] || m_fail 13 "Error: Usage args. 2 expected. (${FUNCNAME})" 
+    [[ -n ${1} ]] || m_fail 13 "Error: Usage args [1]. Empty string not expected.  (${FUNCNAME})" 
+    [[ ${2} =~ ^[A-Z0-9_]+$ ]] || m_fail 13 "Error: Usage args [2]. MUSE variable name expected. (${FUNCNAME})" 
+    local TF="${M_TMP}/${RANDOM}"
+
+    #======================================
+    # Create a file name in the tmp files 
+    # directory 
+    #======================================
+    [[ -d "${M_TMP}" ]] || m_fail 13 "Error: M_TMP not set (${FUNCNAME})" 
+    while [[ -f "${TF}" ]]
+    do
+        TF="${M_TMP}/${RANDOM}"
+    done
+    
+    ## Instantiate it with a null write
+    :>"${TF}" || m_fail 2 "Error: Failed to write to tmp file (${FILE}) (${FUNCNAME})" 
+
+    ## Return the path to the new file
+    eval ${2}="${TF}" || m_fail 13 "Error: Variable assignement failed (${FUNCNAME})" 
+}
+##############################################################
+##
+## Name         :   m_get_tmp_file
+## Author       :   Bradley Atkins
+## Description  :   Create a tmp file with a unique name
+## Date         :   28/08/2012
+## Args         :   1 - Name of function or script requiring file
+##                  2 - Name of variable to hold path to file
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_tmp_file()
+{
+    #======================================
+    # Validation
+    #======================================
+    [[ $# -eq 2 ]] || m_fail 13 "Error: Usage args. 2 expected. (${FUNCNAME})" 
+    [[ -n ${1} ]] || m_fail 13 "Error: Usage args [1]. Empty string not expected.  (${FUNCNAME})" 
+    [[ ${2} =~ ^[A-Z0-9_]+$ ]] || m_fail 13 "Error: Usage args [2]. MUSE variable name expected. (${FUNCNAME})" 
+
+    #======================================
+    # Create a file name in the tmp files 
+    # directory or overwrite if existing
+    #======================================
+    [[ -d "${M_TMP}" ]] || m_fail 13 "Error: M_TMP not set (${FUNCNAME})" 
+    local FILE="${M_TMP}/${1}.tmp"
+    
+    ## Instantiate it with a null write
+    :>"${FILE}" || m_fail 2 "Error: Failed to write to tmp file (${FILE}) (${FUNCNAME})" 
+
+    ## Return the path to the file
+    eval ${2}="${FILE}" || m_fail 13 "Error: variable assignment failed.  (${FUNCNAME})" 
+}
+##############################################################
+##
+## Name         :   m_get_tmp_dir
+## Author       :   Bradley Atkins
+## Description  :   Create a directory under tmp
+## Date         :   03/01/2015
+## Args         :   1 - VAR to return dir path
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_tmp_dir()
+{
+    #======================================
+    # Validate
+    #======================================
+    [[ $# -eq 1 ]] || m_fail 2 "Error: Usage. Arg count. 1 expected (${FUNCNAME})"
+    [[ ${1} =~ ^[[0-9A-Z_]+$ ]] || m_fail 2 "Error: Usage. Args[1]. MUSE variable name expected (${FUNCNAME})" 
+
+    #======================================
+    # Create a unique dir under /tmp
+    #======================================
+    local TMPDIR=/tmp/muse_dir_${RANDOM}
+    while [[ -d "${TMPDIR}" ]] 
+    do
+        TMPDIR=/tmp/muse_dir_${RANDOM}
+    done
+
+    mkdir "${TMPDIR}" || m_fail 2 "Error: Failed to create tmp directory (${TMPDIR}) (${FUNCNAME})" 
+
+    eval ${1}="${TMPDIR}"
+
+}
+##############################################################
+##
+## Name         :   m_clean_file
+## Author       :   Bradley Atkins
+## Description  :   Strip out comments etc from a file
+##                  If source and dest are the same then overwrite
+## Date         :   25/07/2012
+## Args         :   1 - Fully qualified file name (source)
+##                  2 - Fully qualified file name (output)
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_clean_file()
+{
+    [[ $# -eq 2 ]] || m_fail 3 "Error: Usage args (${FUNCNAME})"
+
+    if [[ "${1}" == "${2}" ]] 
+    then
+        local FILE
+        m_get_tmp_file ${FUNCNAME} FILE 
+        m_check_file -frw "${1}" || m_fail 3 "Error: File validation (${1}) 1 (${FUNCNAME})" 
+        sed 's/[#].*$//g' "${1}" | awk NF > "${FILE}"
+        for s in ${PIPESTATUS[@]}; do [[ $s -eq 0 ]] || m_fail 3 "Error:Pipe failed 1 (${FUNCNAME})" ; done 
+        cat "${FILE}" > "${1}"
+    else
+        m_check_file -fr "${1}" || m_fail 3 "Error: File validation (${1}) 2 (${FUNCNAME})" 
+        m_check_file -fw "${2}" || m_fail 3 "Error: File validation (${2}) 3 (${FUNCNAME})" 
+        sed 's/[#].*$//g' "${1}" | awk NF > "${2}"
+        for s in ${PIPESTATUS[@]}; do [[ $s -eq 0 ]] || m_fail 3 "Error:Pipe failed 2 (${FUNCNAME})" ; done 
+    fi
+}
+##############################################################
+##
+## Name         :   m_inc_thread_id
+## Author       :   Bradley Atkins
+## Description  :   increment the msg thread id
+## Date         :   25/12/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_inc_thread_id()
+{
+    M_THREAD_ID=$((M_THREAD_ID + 1))
+}
+##############################################################
+##
+## Name         :   m_new_outbound_msg
+## Author       :   Bradley Atkins
+## Description  :   Create a new outbound message. Write to DB
+##                  and message file.
+## Date         :   03/01/2014
+## Args         :   1 - sender_id (msgs_id from sender msg table)
+##					2 - tx_time (Time stamp from inbound message)
+##                  3 - thread_id (MSG thread this msg belongs to)
+##                  4 - priority (1 - High, 2 - Medium, 3 - Low)
+##                  5 - sender (hostname of sender)
+##                  6 - recipient (hostname)
+##                  7 - action_flag (Corresponds to Action for SM)
+##                  8 - payload (Any metadata required by the action)
+##                  9 - direction (INBOUND or OUTBOUND)
+##                  10- status (NEW, PROCESSED, TIMEOUT)
+##                  11- session_id (Global session ID set by master)
+##					12- Var to return ID in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_new_outbound_msg()
+{
+    [[ $# -eq 12 ]] || m_fail 2 "Error: Args count. 12 Expected (${FUNCNAME})"
+	
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Usage args [1]. Integer expected. (${FUNCNAME})"
+	[[ -n ${2} ]] || m_fail 2 "Error: Usage args [2] Time stamp expected. (${FUNCNAME})"
+	[[ ${3} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Usage args [3] integer expected. (${FUNCNAME})"
+	[[ (${4} -eq 1) || (${4} -eq 2) || (${4} -eq 3) ]] || m_fail 2 "Error: Usage args [4] Priority out of range (${1}). 1 - 3 expected.(${FUNCNAME})"
+	[[ -n ${5} ]] || m_fail 2 "Error: Usage args [5] Sender expected. (${FUNCNAME})"
+	[[ -n ${6} ]] || m_fail 2 "Error: Usage args [6] Recipient expected. (${FUNCNAME})"
+	[[ ${7} =~ ^[A-Z0-9_]+$ ]] || m_fail 2 "Error:  Usage args. [7] Action Expected. (${FUNCNAME})"
+	[[ -n ${8} ]] || m_fail 2 "Error: Usage args [8] payload expected. (${FUNCNAME})"
+	[[ (${9} == "INBOUND") || (${9} == "OUTBOUND") ]] || m_fail 2 "Error:  Usage args. [9] Direction expected. (${FUNCNAME})"
+	[[ (${10} == "NEW") || (${10} == "PROCESSED") || (${10} == "TIMEOUT") ]] || m_fail 2 "Error:  Usage args. [10] Status expected. (${FUNCNAME})"
+	[[ -n ${11} ]] || m_fail 2 "Error: Usage args. [11] Session ID expected (${FUNCNAME})" 
+    [[ ${12} =~ ^[A-Z0-9_]+$ ]] || m_fail 2 "Error: MUSE variable name expected (${FUNCNAME})" 
+
+    local ID=
+
+    #======================================
+    # Write the message to the DB
+    #======================================
+    m_set_msg "${1}" "${2}" "${3}" "${4}" "${5}" "${6}" "${7}" "${8}" "${9}" "${10}" "${11}" ID
+
+    #======================================
+    # Now write the msg file for tx to pick up
+    #======================================
+    m_write_outbound_msg "${ID}" "${2}" "${3}" "${4}" "${5}" "${6}" "${7}" "${8}" "${9}" "${10}" "${11}"
+
+    eval ${12}=${ID}
+}
+##############################################################
+##
+## Name         :   m_get_epoch_milliseconds
+## Author       :   Bradley Atkins
+## Description  :   Return the epoch time in milli seconds
+## Date         :   06/04/2014
+## Args         :   1 - Name of variable to return value in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_epoch_milliseconds()
+{
+    [[ ${1} =~ ^[A-Z0-9_]+$ ]] || m_fail 2 "Error: MUSE variable name expected (${FUNCNAME})" 
+    local T="$(($(date +%s%N)/1000000))"
+    [[ ${T} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Failed to recover epoch time. (${FUNCNAME})" 
+    eval ${1}=${T}
+}
+##############################################################
+##
+## Name         :   m_get_epoch_seconds
+## Author       :   Bradley Atkins
+## Description  :   Return the epoch time in seconds
+## Date         :   06/04/2014
+## Args         :   1 - Name of variable to return value in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_epoch_seconds()
+{
+    [[ ${1} =~ ^[A-Z0-9_]+$ ]] || m_fail 2 "Error: MUSE variable name expected (${FUNCNAME})" 
+    local T="$(date +%s)"
+    [[ ${T} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Failed to recover epoch time. (${FUNCNAME})" 
+    eval ${1}=${T}
+}
+##############################################################
+##
+## Name         :   m_update_file
+## Author       :   Bradley Atkins
+## Description  :   Find a line by pattern or number in a file
+##                  and replace it with $4. This function 
+##                  requires one pattern only and throws a fail
+##                  if more than one match per call.
+## Date         :   31/01/2015
+## Args         :   1 - <Filename>
+##                  2 - <Pattern|No>
+##                  3 - <type> 1(Line No) 2(Pattern)
+##                  4 - Replacement Line
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_update_file()
+{
+    [[ $# -eq 4 ]] || m_fail 2 "Error: (${FUNCNAME})"
+    [[ -w "${1}" ]] || m_fail 2 "Error: Usage. Arg[1]. Writable file expected (${FUNCNAME})" 
+    [[ -r "${1}" ]] || m_fail 2 "Error: Usage. Arg[1]. Readable file expected (${FUNCNAME})" 
+    [[ -n ${2} ]] || m_fail 2 "Error: Usage. Arg[2]. Pattern or line no expected (${FUNCNAME})" 
+    [[ ${3} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Usage. Arg[3]. Integer expected (${FUNCNAME})" 
+    [[ -n ${4} ]] || m_fail 2 "Error: Usage. Arg[4]. Replacement Line expected (${FUNCNAME})" 
+    
+    local TMPFILE LN MATCHES
+    m_get_tmp_file ${FUNCNAME} TMPFILE
+
+    #======================================
+    # What type of line search?
+    #======================================
+    case ${3} in
+        1) 
+            #======================================
+            # Search by line No
+            #======================================
+            [[ ${2} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Usage. Arg[2]. Integer expected (${FUNCNAME})" 
+            [[ ${2} -gt 0 ]] || m_fail 2 "Error: Usage. Arg[2]. Integer > 0 expected (${FUNCNAME})" 
+
+            head -n $(( $2 - 1 )) "${1}" > "${TMPFILE}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+            echo "${4}" >> "${TMPFILE}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+            tail -n +$(( $2 + 1 )) "${1}" >> "${TMPFILE}" || m_fail 2 "Error: Write failed (${FUNCNAME})" 
+
+            mv "${TMPFILE}" "${1}" || m_fail 2 "Error: (Move failed ${FUNCNAME})" 
+        ;;
+        2)
+            #======================================
+            # Search by pattern
+            #======================================
+            MATCHES=$( wc -l < <(grep -n "${2}" "${1}" | cut -d":" -f 1 ) )
+            [[ ${MATCHES} -eq 0 ]] && m_fail 2 "Error: No matches for pattern (${2}) in file (${1}) (${FUNCNAME})" 
+            [[ ${MATCHES} -gt 1 ]] && m_fail 2 "Error: Multiple matches for pattern (${2}) in file (${1}) (${FUNCNAME})" 
+            LN=$( grep -n "${2}" "${1}" | cut -d":" -f 1 )
+
+            head -n $(( $LN - 1 )) "${1}" > "${TMPFILE}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+            echo "${4}" >> "${TMPFILE}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+            tail -n +$(( $LN + 1 )) "${1}" >> "${TMPFILE}" || m_fail 2 "Error: Write failed (${FUNCNAME})" 
+            
+            mv "${TMPFILE}" "${1}" || m_fail 2 "Error: (Move failed ${FUNCNAME})" 
+        ;;
+        *) m_fail 2 "Error: Unrecognised search type (${FUNCNAME})";;
+    esac
+
+}

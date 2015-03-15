@@ -1,0 +1,2500 @@
+#! /bin/bash
+##############################################################
+##
+## Name             :   master.funcs
+## Author           :   Bradley Atkins
+## Description      :   Core functions for muse master
+##                      MUSE is released by Bradley Atkins under
+##                      GNU general Public License, V1
+##                      As defined here - 
+##                      http://www.gnu.org/licences/gpl-1.0.html
+##
+## Date             :   20/07/2012
+##
+##############################################################
+
+#======================================
+# General Utilities
+#======================================
+
+##############################################################
+##
+## Name         :   m_prompt_yesno
+## Author       :   Bradley Atkins
+## Description  :   Prompt the user for a yes or no answer
+## Date         :   27/08/2012
+## Args         :   1 - Question
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_prompt_yesno()
+{
+    [[ $# -eq 1 ]] || m_fail 2 "Error: Usage args (${FUNCNAME})"
+
+    printf "\n%s\n" "${1}"
+    while true
+    do
+        read -p "Do you want to continue (Y/N)?" ANSWER
+        case ${ANSWER} in
+            Y|y)
+                return 0;;
+            N|n) 
+                return 1;;
+            *) echo "Please answer y or n.";;
+        esac
+    done
+}
+##############################################################
+##
+## Name         :   m_validate_environment_variables
+## Author       :   Bradley Atkins
+## Description  :   Confirm if the vars passed are set
+## Date         :   22/07/2012
+## Args         :   1 - Set or Unset n or z
+##                  2 - List of variable names
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+##############################################################
+m_validate_environment_variables()
+{
+    [[ $# -eq 0 ]] && return 1
+    [[ ${1} != "z" && ${1} != "n" ]] && return 2
+
+    local EV RESULT=pass TEST=${1}
+
+    shift
+
+    for EV in $@
+    do
+        eval [[ -${TEST}  '"${'${EV}'}"' ]] || RESULT=fail
+        if [[ ${RESULT} == fail ]]
+        then
+            echo ${EV}
+            return 3
+        fi
+    done
+
+    return 0
+}
+##############################################################
+##
+## Name         :   m_wait
+## Author       :   Bradley Atkins
+## Description  :   Non blocking test for pid. Returns 0
+##                  if job running. 1 if not.
+## Date         :   20/09/2012
+## Args         :   1 - PID
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_wait()
+{
+    [[ $# -eq 1 ]] || m_fail 2 "Error: Usage args (${FUNCNAME})"
+
+    [[ -n $(ps -ef | grep $1 | grep ssh ) ]] && return 0
+
+    return 1
+}
+
+#======================================
+# Plugin Parsing Functions
+#======================================
+
+##############################################################
+##
+## Name         :   m_parse_muse_script
+## Author       :   Bradley Atkins
+## Description  :   Find the script we are about to run
+##                  and verify etc
+## Date         :   04/08/2012
+## Args         :   1 - Name of plugin
+##                  2 - Name of variable to return results in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_parse_muse_script()
+{
+    [[ $# -eq 2 ]] || m_fail 2 "Error: Usage args. 2 expected (${FUNCNAME})" 
+
+    local FQFN TMP
+
+    #======================================
+    # We have been passed an unqualified
+    # script name so we need to find it
+    #======================================
+    m_find_file "${1}" FQFN
+    m_check_file -rx "${FQFN}" || m_fail 2 "Error: Plugin failed validation - permissions (${FUNCNAME})" 
+
+    ## Where are we running? 
+    m_get_run_hosts "${FQFN}" TMP
+
+    [[ -n "${TMP}" ]] || m_fail 2 "Error: Failed to retrieve Job Host (${FUNCNAME})" 
+
+    eval $2='"${TMP}"'
+}
+##############################################################
+##
+## Name         :   m_get_grep_pattern
+## Author       :   Bradley Atkins
+## Description  :   Retrieve the grep pattern, if set, from 
+##                  a script header. Assumes readable file
+## Date         :   11/09/2012
+## Args         :   1 - FQName of script
+##                  2 - MUSE var for return
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_grep_pattern()
+{
+    [[ $# -eq 2 ]] || m_fail 2 "Error: Usage. Args. Count. 1 expected. (${FUNCNAME})" 
+    [[ -r "${1}" ]] || m_fail 2 "Error: Usage. Args [1]. Readable file expected (${FUNCNAME})" 
+    [[ ${2} =~ ^[A-Z0-9_]+$ ]] || m_fail 2 "Error: Usage. Args [2]. MUSE variable expected. (${FUNCNAME})" 
+
+    #======================================
+    # Parse the M_JOB_HOST from the header
+    #======================================
+    local TMPSTR1=$(sed -n '/M_GREP_PATTERN/p' "${1}") TMPSTR2= PATTERN= S=
+    [[ -n ${TMPSTR1} ]] || m_fail 2 "Error: Malformed header in plugin (${1}) (${FUNCNAME})" 
+
+    #======================================
+    # Extract the pattern
+    #======================================
+    TMPSTR2=$(echo ${TMPSTR1} | cut -d" " -f3-)
+    for S in ${PIPESTATUS[@]}; do [[ ${S} -eq 0 ]] || m_fail 2 "Error: Failed to extract grep pattern from plugin (${1}) (${FUNCNAME})";done
+
+    #======================================
+    # If name not set just default to constant
+    #======================================
+    if [[ -z "${TMPSTR2}" ]] 
+    then
+        PATTERN="${C_GREP_PATTERN}"
+    else
+        PATTERN="${TMPSTR2}"
+    fi
+
+    #======================================
+    # Test the pattern is legal
+    #======================================
+    egrep -i "${PATTERN}" "${1}" >/dev/null 2>&1 || m_fail 2 "Error: Invalid regex for egrep. (${FUNCNAME})" 
+
+    eval ${2}="${TMPSTR2}"
+}
+##############################################################
+##
+## Name         :   m_get_run_hosts
+## Author       :   Bradley Atkins
+## Description  :   Retrieve the run server, if set, from 
+##                  a script header. Assumes readable file
+## Date         :   04/08/2012
+## Args         :   1 - FQName of script
+##                  2 - Variable to return results in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_run_hosts()
+{
+    [[ $# -eq 2 ]] || m_fail 2 "Error: Usage args. 2 expected (${FUNCNAME})" 
+
+    ## Parse the M_JOB_HOST from the header
+    local TMPSTR1=$(sed -n '/## M_JOB_HOST/p' "${1}") TMPSTR2= VALUE LIST
+    [[ -n ${TMPSTR1} ]] || m_fail 2 "Error: Malformed file header (${1}) (${FUNCNAME})" 
+
+    ## Cut out the server name
+    TMPSTR2=$(echo ${TMPSTR1} | cut -d" " -f3-)
+
+    ## If name not set just default to local host
+    if [[ -z "${TMPSTR2}" ]] 
+    then
+        eval $2=${HOSTNAME} 
+        return
+    fi
+
+    #======================================
+    # We have a list of run hosts but in what 
+    # forms?
+    #======================================
+    for VALUE in ${TMPSTR2}
+    do
+        ## Test for TYPE
+        if [[ ${H_TYPES} == *${VALUE}* ]]
+        then
+            m_select_host_data server_fqdn server_type ${VALUE} TMPSTR1
+            [[ -n ${TMPSTR1} ]] || m_fail 2 "Error: No names returned for server type (${VALUE}) (${FUNCNAME})" 
+            LIST="$(echo ${LIST} ${TMPSTR1})"
+
+        ## Test for IP address
+        elif [[ ${VALUE} =~ ^[0-9]{1,3}[.]{1}[0-9]{1,3}[.]{1}[0-9]{1,3}[.]{1}[0-9]{1,3}$ ]]
+        then
+            m_select_host_data server_fqdn ip ${VALUE} TMPSTR1
+            [[ -n ${TMPSTR1} ]] || m_fail 2 "Error: No names returned for IP address (${VALUE}) (${FUNCNAME})" 
+            LIST="$(echo ${LIST} ${TMPSTR1})"
+
+        ## Test for OS
+        elif [[ ${H_OS} == *${VALUE}* ]] 
+        then
+            m_select_host_data server_fqdn os ${VALUE} TMPSTR1
+            [[ -n ${TMPSTR1} ]] || m_fail 2 "Error: No names returned for operating system (${VALUE}) (${FUNCNAME})" 
+            LIST="$(echo ${LIST} ${TMPSTR1})"
+
+        ## Test for FQDN
+        elif [[ ${VALUE} == *".com"* ]]
+        then
+            m_select_host_data server_fqdn server_fqdn ${VALUE} TMPSTR1
+            [[ -n ${TMPSTR1} ]] || m_fail 2 "Error: No names returned for server fqdn (${VALUE}) (${FUNCNAME})" 
+            LIST="$(echo ${LIST} ${TMPSTR1})"
+        ## Run var is evaluated later
+        elif [[ ${VALUE} == "M_RUN_"* ]]
+        then
+            LIST="$(echo ${LIST} ${VALUE})"
+        ## Single SNAME or error
+        else 
+            m_select_host_data server_fqdn sname ${VALUE} TMPSTR1
+            if [[ -n ${TMPSTR1} ]]
+            then
+                LIST="$(echo ${LIST} ${TMPSTR1})"
+            else
+                m_fail 13 "Error: Unrecognised host entry (${VALUE}) (${FUNCNAME})" 
+            fi
+        fi
+        TMPSTR1=""
+    done
+
+    [[ -n ${LIST} ]] || m_fail 2 "Error: Empty run list returned for Job Host (${TMPSTR2})  (${FUNCNAME})" 
+
+    eval $2='$(echo ${LIST})'
+}
+
+#======================================
+# MUSE Master Control
+#======================================
+
+##############################################################
+##
+## Name         :   m_init
+## Author       :   Bradley Atkins
+## Description  :   Set up our runtime env
+## Date         :   22/07/2012
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_init()
+{
+    [[ $# -eq 0 ]] || m_fail 2 "Error: Usage args (${FUNCNAME})"
+    local TMP= GC=
+
+    #======================================
+    # Check our exported variables
+    #======================================
+    [[ -n ${M_SYS_TAG} ]] || m_fail 2 "Error: Sys tag not set (${FUNCNAME})"
+    [[ -n ${M_USR_TAG} ]] || m_fail 2 "Error: Usr tag not set (${FUNCNAME})"
+    [[ -n ${M_RUN_ROOT} ]] || m_fail 2 "Error: Run root not set (${FUNCNAME})"
+
+    if ! which ${M_SQLITE} >/dev/null 2>&1
+    then
+        m_fail 2 "Error: sqlite (${M_SQLITE}) not found on server(${FUNCNAME})"
+    fi
+
+    #======================================
+    # Create the run directories
+    #======================================
+    eval M_CNXN_PATH=~${M_USR}/.ssh/master
+    mkdir -p "${M_RUN_ROOT}"
+    [[ -d "${M_RUN_ROOT}" ]] || m_fail 2 "Error: Failed to create run time root dir (${FUNCNAME}"
+    mkdir -p "${M_RUN_ROOT}/m_system"
+    [[ -d "${M_RUN_ROOT}/m_system" ]] || m_fail 2 "Error: Failed to create run time system dir (${FUNCNAME}"
+    mkdir -p "${M_NEWEXP}"
+    [[ -d "${M_NEWEXP}" ]] || m_fail 2 "Error: Failed to create run time exp dir (${FUNCNAME}"
+    mkdir -p "${M_TMP}"
+    [[ -d "${M_TMP}" ]] || m_fail 2 "Error: Failed to create run time tmp dir (${FUNCNAME}"
+    mkdir -p "${M_CONTROL}"
+    [[ -d "${M_CONTROL}" ]] || m_fail 2 "Error: Failed to create run time control dir (${FUNCNAME}"
+    mkdir -p "${M_RESULTS}"
+    [[ -d "${M_RESULTS}" ]] || m_fail 2 "Error: Failed to create run time results dir (${FUNCNAME}"
+    [[ -d "${M_DEV_ROOT}" ]] || m_fail 2 "Error: Failed to find development directory ("${M_DEV_ROOT}") (${FUNCNAME})" 
+
+    mkdir -p "${M_MSG_IN_BUFFER}"
+    [[ -d "${M_MSG_IN_BUFFER}" ]] || m_fail 2 "Error: Failed to create msg in buffer dir (${FUNCNAME})"
+    mkdir -p "${M_MSG_IN_PENDING}"
+    [[ -d "${M_MSG_IN_PENDING}" ]] || m_fail 2 "Error: Failed to create msg in pending dir (${FUNCNAME})"
+    mkdir -p "${M_MSG_IN_PROCESSED}"
+    [[ -d "${M_MSG_IN_PROCESSED}" ]] || m_fail 2 "Error: Failed to create msg in processed dir (${FUNCNAME})"
+
+    mkdir -p "${M_MSG_OUT_BUFFER}"
+    [[ -d "${M_MSG_OUT_BUFFER}" ]] || m_fail 2 "Error: Failed to create msg out buffer dir (${FUNCNAME})"
+    mkdir -p "${M_MSG_OUT_PENDING}"
+    [[ -d "${M_MSG_OUT_PENDING}" ]] || m_fail 2 "Error: Failed to create msg out pending dir (${FUNCNAME})"
+    mkdir -p "${M_MSG_OUT_PROCESSED}"
+    [[ -d "${M_MSG_OUT_PROCESSED}" ]] || m_fail 2 "Error: Failed to create msg out processed dir (${FUNCNAME})"
+    
+    mkdir -p "${M_RPT_IN_BUFFER}"
+    [[ -d "${M_RPT_IN_BUFFER}" ]] || m_fail 2 "Error: Failed to create rpt in buffer dir (${FUNCNAME})"
+    mkdir -p "${M_RPT_IN_PENDING}"
+    [[ -d "${M_RPT_IN_PENDING}" ]] || m_fail 2 "Error: Failed to create rpt in pending dir (${FUNCNAME})"
+    mkdir -p "${M_CONTROL}/${M_FILE_EXCHANGE}"
+    [[ -d "${M_CONTROL}/${M_FILE_EXCHANGE}" ]] || m_fail 2 "Error: Failed to create file exchange dir (${FUNCNAME})"
+    mkdir -p "${M_MS_OBJ}"
+    [[ -d "${M_MS_OBJ}" ]] || m_fail 2 "Error: Failed to create file object suite dir (${FUNCNAME})"
+
+    #======================================
+    # Setup the master db
+    #======================================
+    m_find_file ${M_MASTER_DB} TMP
+    cp "${TMP}" "${M_DB_FILE}" || m_fail 2 "Error: Failed to copy master db file (${FUNCNAME})" 
+    chmod +rw "${M_DB_FILE}" || m_fail 2 "Error: chmod failed for ("${M_DB_FILE}") (${FUNCNAME})" 
+    M_DB="$(which ${M_SQLITE}) ${M_DB_FILE} "
+    M_DB_LOCK="${M_TMP}/sqlite.flock"
+    M_DB_ERROR="${M_TMP}/sqlite.error"
+    ## TODO Should the above be moved to master.env?
+    
+    :>"${M_SLAVE_REGISTER}"
+    :>"${M_SLAVE_REGISTER_LOCK}"
+
+    #======================================
+    # Check we can access the msgs table
+    # by way of a smoke test
+    #======================================
+    if ! m_check_table_exists msgs
+    then
+        m_fail 2 "Error: Unable to access msgs table in master db (${M_DB}) (${FUNCNAME})" 
+    fi
+    
+    #======================================
+    # User can set M_RUN_FILE on cmd line
+    # for run time env vars
+    #======================================
+    if [[ -n ${M_RUN_FILE} ]]
+    then
+        if [[ -r "${M_RUN_FILE}" ]]
+        then
+            export M_RUN_FILE
+        else
+            m_fail 2 "Run file defined (${M_RUN_FILE}) but not readable (${FUNCNAME})"
+        fi
+    fi
+
+    #======================================
+    # Site specific set for M_CLUSTER
+    #======================================
+    m_find_file get_cluster GC
+    M_CLUSTER=$("${GC}")
+    export M_CLUSTER
+}
+##############################################################
+##
+## Name         :   m_parse_report
+## Author       :   Bradley Atkins
+## Description  :   Parse a report file. Look for errors, 
+##                  exclusions and marked evidence
+## Date         :   09/09/2012
+## Args         :   1 - FQ Name of report
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_parse_report()
+{
+    [[ -r "${1}" ]] || m_fail 2 "Error: Usage. Args [1]. Readable report file expected. (${FUNCNAME})" 
+
+    local RPT=${1} RESLIST= ERRLIST= ERRFILE= OUTFILE= RPT_BN= FQFN= FAILED="false" REGEX= EXEC_ID= EXEC_ORDER=
+    m_check_file -rf "${RPT}" || m_fail 2 "Error: Failed to find file (${1}) (${FUNCNAME})"
+
+    local TMPFILE1= TMPFILE2= X= Y=
+    m_get_tmp_file m_parse_report_1 TMPFILE1
+    m_get_tmp_file m_parse_report_2 TMPFILE2
+
+    local EVDC="${M_RESULTS}/summary.evidence" ERRS="${M_RESULTS}/summary.errors" MSGS="${M_RESULTS}/summary.msgs"
+    
+    #======================================
+    # Parse the results files for evidence 
+    # markers, warnings and errors
+    #======================================
+    RPT_BN=$(basename "${RPT}")
+    EXEC_ID=$(echo ${RPT_BN} | sed 's#.*\b\([0-9]\+\)-.*#\1#')
+    [[ ${EXEC_ID} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Failed to parse exec_id from report path (${FUNCNAME})" 
+    m_get_exec_data ${EXEC_ID} exec_order EXEC_ORDER
+    [[ ${EXEC_ORDER} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Failed to retrieve exec order (${FUNCNAME})" 
+
+    #======================================
+    # Copy everything not between exclusion
+    # markers
+    #======================================
+    sed '/'"${C_EQUALS}"'/,/'"${C_EQUALS}"'/d' "${RPT}" > "${TMPFILE1}"
+
+    #======================================
+    # Marked evidence in unadulterated rpt
+    #======================================
+    #if [[ -n $(egrep "${C_GREP_EVIDENCE}" "${TMPFILE1}" 2>/dev/null) ]]
+    if egrep "${C_GREP_EVIDENCE}" "${RPT}" 2>/dev/null
+    then
+        {
+            printf "%s\n" "${C_BREAK}"
+            printf "%s\n" " Summary of marked evidence in - ${EXEC_ORDER}_${RPT_BN}"
+            printf "%s\n" "${C_BREAK}"
+            awk -v p="$C_EVIDENCE" -v op=0 '($0==p){op=!op;print p;next} op{print}' ${RPT}
+            printf "%s\n" "${C_BREAK}"
+            printf "\n\n"
+        } >> "${EVDC}"
+    fi
+
+    FAILED=false
+
+    #======================================
+    # Handle our marked errors
+    #======================================
+    if [[ -n $(egrep "${C_GREP_ERROR}" "${RPT}" 2>/dev/null) ]]
+    then
+        FAILED="true"
+        M_TOTAL_FAILURES=$(($M_TOTAL_FAILURES + 1))
+        {
+            printf "%s\n" "${C_BREAK}"
+            printf "%s\n" " Summary of marked runtime errors in - ${EXEC_ORDER}_${RPT_BN}"
+            printf "%s\n" "${C_BREAK}"
+            awk -v p="$C_ERROR" -v op=0 '($0==p){op=!op;print p;next} op{print}' ${RPT}
+            printf "\n\n"
+        } >> "${ERRS}"
+    fi
+    
+    #======================================
+    # Handle stderr errors and user defined
+    #======================================
+    m_find_file "$(X=$(basename ${RPT});Y=$(echo ${X#*-});echo ${Y%.*})" FQFN
+    m_get_grep_pattern "${FQFN}" REGEX
+
+    #======================================
+    # grep for patterns defined by the grep
+    # regex from the plugin header
+    #======================================
+    if egrep -i "${REGEX}" "${TMPFILE1}" > "${TMPFILE2}"
+    then
+        FAILED="true"
+        M_TOTAL_FAILURES=$(($M_TOTAL_FAILURES + $(wc -l "${TMPFILE2}" | cut -d" " -f1)))
+        {
+            printf "%s\n" "${C_BREAK}"
+            printf "%s\n" " Summary of standard error msgs (stderr) in - ${EXEC_ORDER}_${RPT_BN}"
+            printf "%s\n\n" "${C_BREAK}"
+            cat "${TMPFILE2}"
+            printf "\n%s\n" "${E_BREAK}"
+            printf "\n\n"
+        } >> "${ERRS}"
+    fi
+    if [[ ${FAILED} == "true" ]] 
+    then
+        m_update_run_screen_body  "${EXEC_ORDER}" "${M_CLR_NOT_OK}"
+    else
+        m_update_run_screen_body  "${EXEC_ORDER}" "${M_CLR_OK}"
+    fi
+    m_write_action "ACT" "REFRESH_RUN_SCREEN"
+
+    #======================================
+    # Move the report to the results dir
+    #======================================
+    mv "${RPT}" "${M_RESULTS}/${EXEC_ORDER}_${RPT_BN}"
+
+}
+##############################################################
+##
+## Name         :   m_validate_cmd_line
+## Author       :   Bradley Atkins
+## Description  :   Validate the command line submitted by the user
+## Date         :   21/07/2012
+## Args         :   Valid args are -
+##              Valid options in arg1
+##              Any number of scripts begining m_
+##              Any number of suites begining ms_
+##              Suites may contain a sub set of valid options
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+##############################################################
+m_validate_cmd_line()
+{
+    [[ $# -eq 0 ]] && m_fail 2 "Error: Usage args (${FUNCNAME})"
+    
+    local F= FUNC_FILE= ARG= FILE= TMPFILE= FLAG= STR= TMP= EXPLAIN=false UT= ST= DIR= TMPD=
+    m_get_tmp_file ${FUNCNAME} TMPFILE
+
+    #======================================
+    # First deal with any options
+    #======================================
+    if [[ $1 =~ ^-|^-- ]] 
+    then
+        local RES=pass
+
+        case ${1} in
+            -a|--archive)
+                shift
+                #======================================
+                # Prompt user for selection
+                #======================================
+                m_select_run_dir -m -r DIR UT ST ${1}
+                if [[ -d "${DIR}" ]] 
+                then
+                    [[ (-n ${UT}) && (-n ${ST}) ]] || 
+                        m_fail 2 "Error: Failed to recover both tags (${UT}) (${ST}) (${FUNCNAME})" 
+                    cd "${DIR}" || m_fail 2 "Error: Failed to CD to results directory ("${DIR}") (${FUNCNAME})" 
+                    if ! [[ -f "${HOME}/${UT}_${ST}_results.tar" ]]
+                    then
+                        tar cvf "${HOME}/${UT}_${ST}_results.tar" * >/dev/null || m_fail 2 "Error: Failed to create archive of results (${FUNCNAME})" 
+                        echo "==============================="
+                        echo "Results archived as ${HOME}/${UT}_${ST}_results.tar"
+                        echo "==============================="
+                    else
+                        echo "==============================="
+                        echo "Archive already exists. Delete "
+                        echo "or move before continuing"
+                        echo "${HOME}/${UT}_${ST}_results.tar"
+                        echo "==============================="
+                    fi
+                else
+                    echo "==============================="
+                    echo "No selection. Quitting."
+                    echo "==============================="
+                fi
+
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+            ;;
+            -c|--clear) ## Delete all results if no tag set or just the results under tag name passed
+                m_remove_run_files
+                M_ACTION=NORUN
+                if [[ $# -gt 1 ]]   ## Clear results under a tag name
+                then
+                    shift
+                    if [[ -d "${M_RUN_ROOT}/run/master/${1}" || -d "${M_RUN_ROOT}/run/slave/${1}" ]]
+                    then
+                        if m_prompt_yesno "Delete all results under tag (${1})?"
+                        then
+                            rm -rf "${M_RUN_ROOT}/run/master/${1}"
+                            rm -rf "${M_RUN_ROOT}/run/slave/${1}"
+                        fi
+                    else
+                        printf "\n%s\n\n" "No tagged results found for (${1})"
+                    fi
+                else            ## Clear all results
+                    if m_prompt_yesno "Delete all results?"
+                    then
+                            rm -rf "${M_RUN_ROOT}"/run/* 2>/dev/null
+                    fi
+                fi  
+                return 0
+                ;;
+            -cat) ## cat a file
+                shift
+                [[ $# -eq 1 ]] || m_fail 2 "Error: Usage. Single arg expected (${FUNCNAME})"
+                FILE=$(awk -v p="${1}" '($NF == p){print;exit}' FS="/" "${M_MUSE_MAP}")
+                if [[ -f "${FILE}" ]]
+                then
+                    cat "${FILE}"
+                else
+                    echo "File (${1}) not found"
+                fi
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -cl)
+                if [[ -f "${M_LOG}" ]]
+                then
+                    if m_prompt_yesno "Delete all log entries?"
+                    then
+                        for f in "${M_LOG%/*}/"*.log
+                        do
+                            :>"${f}"
+                        done
+                    fi
+                else
+                    echo "Log not found (${M_LOG})"
+                fi
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -cp|--copyright) ## Display the copyright notice
+                m_remove_run_files
+                m_find_file copyright_notice TMP
+                if [[ -r "${TMP}" ]]
+                then
+                    cat "${TMP}"
+                else
+                    clear
+                    echo "Warning!"
+                    echo "Unable to find copyright notice."
+                    echo "This copy of MUSE is unlawful."
+                    echo "Please refer to the terms of the licence agreement."
+                fi
+                M_ACTION=NORUN
+                return 0
+                
+            ;;
+            -cf|--copyf) ## Copy a plugin or suite or file to dev root
+                shift
+                [[ $# -eq 1 ]] || m_fail 2 "Error: Usage. Single arg expected (${FUNCNAME})" 
+                FILE=$(awk -v p="${1}" '($NF == p){print;exit}' FS="/" "${M_MUSE_MAP}")
+                if [[ -f "${FILE}" ]]
+                then
+                    cp "${FILE}" "${M_DEV_ROOT}"/ || m_fail 2 "Error: cp failed (${FUNCNAME})" 
+                    chmod +w "${M_DEV_ROOT}"/${FILE##*/} || m_fail 2 "Error: chmod failed (${FUNCNAME})" 
+                else
+                    echo "File (${1}) not found"
+                fi
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -d|--delete) ## Delete the current tag
+                m_remove_run_files
+                :>"${M_USR_TAG_FILE}"
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -e|--explain)
+                shift
+                EXPLAIN=true
+                ;;
+            -fr|--findr) ## Find a set of results or all results
+                shift
+                m_remove_run_files
+                if [[ -n ${1} ]] ## User wants a tagged set
+                then
+                    if [[ -d "${M_RUN}/${1}" ]] 
+                    then
+                        eval ls -lrt "${M_RUN}/${1}/"*/m_results 2>/dev/null
+                    else
+                        printf "\n%s\n\n" "No tagged results found for (${1})"
+                    fi
+                else ## No tag passed so show all results
+                    ls -lrt "${M_RUN}"/*/*/m_results 2>/dev/null
+                fi
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -flr|--findlr) ## Find last set of results
+                shift
+                m_remove_run_files
+                if [[ -n ${1} ]] ## User wants a tagged set
+                then
+                    m_check_file -d "${M_RUN}/${1}" s
+                    if [[ $? -eq 0 ]]
+                    then
+                        echo "====================================================="
+                        echo "${M_RUN}"/*/*/m_results | awk '{print $NF}'
+                        eval ls -lrt $(echo "${M_RUN}/${1}/"*/m_results | awk '{print $NF}')
+                        echo;echo "${M_RUN}"/*/*/m_results | awk '{print $NF}'
+                       echo "====================================================="
+                    else
+                        printf "\n%s\n\n" "No tagged results found for (${1})"
+                    fi
+                else ## No tag passed so show all results
+                    echo "====================================================="
+                    echo "${M_RUN}"/*/*/m_results | awk '{print $NF}'
+                    ls -lrt $(echo "${M_RUN}"/*/*/m_results | awk '{print $NF}')
+                    echo;echo "${M_RUN}"/*/*/m_results | awk '{print $NF}'
+                    echo "====================================================="
+                fi
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -fc|--findc) ## Find a set of control files
+                shift
+                m_remove_run_files
+                if [[ -n ${1} ]] ## User wants a tagged set
+                then
+                    m_check_file -d "${M_RUN}/${1}" s
+                    if [[ $? -eq 0 ]]
+                    then
+                        [[ $(echo ${M_RUN}/${1}/* | tr " " "\n" | wc -l) -eq 1 ]] && echo "${M_RUN}/${1}/"*/m_control
+                        ls -lrt "${M_RUN}/${1}/"*/m_control
+                    else
+                        printf "\n%s\n\n" "No tagged control files found for (${1})"
+                    fi
+                else ## No tag passed so show all results
+                    [[ $(echo ${M_RUN}/*/* | tr " " "\n" | wc -l) -eq 1 ]] && echo "${M_RUN}"/*/*/m_control
+                    ls -lrt "${M_RUN}"/*/*/m_control
+                fi
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -fe|--finde) ## Find a set of expected result files
+                shift
+                m_remove_run_files
+                if [[ -n ${1} ]] ## User wants a tagged set
+                then
+                    if [[ -d "${M_RUN}/${1}" ]]
+                    then
+                        ls -lrt "${M_RUN}/${1}/"*/m_newexp 2>/dev/null
+                    else
+                        printf "\n%s\n\n" "No tagged expected files found for (${1})"
+                    fi
+                else ## No tag passed so show all results
+                    if [[ -d "${M_RUN}" ]]
+                    then
+                        ls -lrt "${M_RUN}"/*/*/m_newexp 2>/dev/null
+                    fi
+                fi
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -ff) ## Give the path to a file
+                #======================================
+                # Is this a list all or 'like' search?
+                #======================================
+                shift
+                printf "%s\n" "${C_BREAK}"
+                if [[ $# -gt 0 ]] 
+                then
+                    [[ $# -eq 1 ]] || m_fail 2 "Error:Pattern or file name expected" 
+                    printf "%s\n" " Matching files available"
+                    printf "%s\n" "${C_BREAK}"
+                    P="${1#\%*}"
+                    if [[ ${1} =~ ^% ]]
+                    then
+                        TMP=$(awk -v p=${P} ' (($NF ~ p)) \
+                            {printf "%s\n", $0}' FS="/" ${M_MUSE_MAP} | sort)
+                    else
+                        TMP=$(awk -v p=${P} ' (($NF == p)) \
+                            {printf "%s\n", $0}' FS="/" ${M_MUSE_MAP} | sort)
+                    fi
+
+                    if [[ -z "${TMP}" ]] 
+                    then
+                        printf "%s\n" "No matching files found"
+                    else
+                        printf "%s\n" "${TMP}"
+                    fi
+                fi
+                m_remove_run_files
+                printf "%s\n" "${C_BREAK}"
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -ft|--findt) ## Find a set of tmp files
+                m_remove_run_files
+                shift
+                if [[ -n ${1} ]] ## User wants a tagged set
+                then
+                    m_check_file -d "${M_RUN}/${1}" s
+                    if [[ $? -eq 0 ]]
+                    then
+                        [[ $(echo ${M_RUN}/${1}/* | tr " " "\n" | wc -l) -eq 1 ]] && echo "${M_RUN}/${1}/"*/m_tmp
+                        ls -lrt "${M_RUN}/${1}/"*/m_tmp
+                    else
+                        printf "\n%s\n\n" "No tagged tmp files found for (${1})"
+                    fi
+                else ## No tag passed so show all results
+                    [[ $(echo ${M_RUN}/*/* | tr " " "\n" | wc -l) -eq 1 ]] && echo "${M_RUN}"/*/*/m_tmp
+                    ls -lrt "${M_RUN}"/*/*/m_tmp
+                fi
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -gb|--get-baseline) ## Get a baseline set of expected results files (snapshot)
+                shift
+                #======================================
+                # Prompt user for selection
+                #======================================
+                m_select_run_dir -m -n DIR UT ST ${1}
+                if [[ -n "${DIR}" ]]
+                then
+                    if [[ -d "${DIR}" ]]
+                    then
+                        #======================================
+                        # Check each server for new exp files
+                        #======================================
+                        m_select_records "select server_fqdn from muse_hosts where cluster_fqdn = '"${M_CLUSTER}"';" "${TMPFILE}"
+                        echo "==============================="
+                        echo "checking for new expected results files:" 
+                        echo "==============================="
+                        m_get_tmp_dir TMPD
+                        while read SERVER
+                        do
+                            echo ${SERVER}
+                            scp ${M_SSH_OPTS} ${SERVER}:$(echo ${DIR} | sed 's/master/slave/g')/* ${TMPD} >/dev/null 2>&1
+                        done < "${TMPFILE}"
+                        #======================================
+                        # Tar up the results and put in HOME 
+                        #======================================
+                        cd "${TMPD}"
+                        for F in $(ls -1 *.exp 2>/dev/null)
+                        do
+                            tar --append --file="${UT}_${ST}_baseline.tar" ${F} || 
+                                m_fail 2 "Error: Failed to append to tar file (${TMPD}/${UT}_${ST}_baseline.tar) (${FUNCNAME})" 
+                        done
+                        echo "==============================="
+                        if [[ -f "${UT}_${ST}_baseline.tar" ]] 
+                        then
+                            mv "${UT}_${ST}_baseline.tar" "${HOME}"
+                            echo "New expected results files found. Archived at ${HOME}/${UT}_${ST}_baseline.tar"
+                        else
+                            echo "No new expected results files found"
+                        fi
+                        echo "==============================="
+                        cd - >/dev/null
+                        [[ -d "${TMPD}" ]] && rm -rf "${TMPD}"
+                    fi
+                else
+                    echo "==============================="
+                    echo "Nothing to do. Quitting"
+                    echo "==============================="
+                fi
+
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -h|--help)
+                usage
+                exit 0;;
+            -l|--list)
+                shift
+                if [[ $# -ne 0 ]]
+                then
+                    m_process_cmd_list $@
+                    awk '($1 ~ "ID"){printf $2" - "}($1 ~ "Name"){print $2}' FS=":" "${M_JOB_CTRL}"
+                else
+                    usage
+                fi
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -lf)
+                shift
+                {
+                while read F
+                do
+                    STR=" No functions available in (${F##*/})"
+                    #======================================
+                    # Is this a list all or pattern search?
+                    #======================================
+                    if [[ $# -gt 0 ]] 
+                    then
+                        sed -n '/## Name[\t ]*:[\t ]*m_/p' "${F}" | sed 's/\(## Name[\t ]*:\)//g' | 
+                            sort | awk -v p=${1#\%*} '($1 ~ p){print}' > "${TMPFILE}"
+                    else
+                        sed -n '/## Name[\t ]*:[\t ]*m_/p' "${F}" | sed 's/\(## Name[\t ]*:\)//g' | sort > "${TMPFILE}"
+                    fi
+                    
+                    if [[ $(wc -l "${TMPFILE}" 2>/dev/null | cut -d" " -f 1) -gt 0 ]] 
+                    then
+                        FLAG="true"
+                    else
+                        continue
+                    fi
+
+                    printf "%s\n" "${C_BREAK}"
+                    printf "%s\n" " ${F}"
+                    printf "%s\n" "${C_BREAK}"
+                    sed 's/^[ \t]*/ /g' "${TMPFILE}"
+
+                done < <(grep ".funcs" "${M_MUSE_MAP}" | grep -v deprecated | grep -v .swp)
+            } 2>/tmp/debug    
+                if [[ ${FLAG} != "true" ]]
+                then
+                    printf "%s\n" "${C_BREAK}"
+                    printf "%s\n" "No matching functions found"
+                    printf "%s\n" "${C_BREAK}"
+                fi
+
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -mdb|--mdatabase) ## Find the master db for last run
+                m_remove_run_files
+                MDBDIR=$(tail -n 1 < <(ls -drt "${M_RUN}"/*/*/m_control))
+                if m_check_file -f "${MDBDIR}/${M_MASTER_DB}"
+                then
+                    sqlite3 "${MDBDIR}/${M_MASTER_DB}"
+                else
+                    printf "\n%s\n\n" "No database found in (${MDBDIR})"
+                fi
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -lp) ## List plugins
+                #======================================
+                # Is this a list all or 'like' search?
+                #======================================
+                shift
+                printf "%s\n" "${C_BREAK}"
+                if [[ $# -gt 0 ]] 
+                then
+                    [[ ${1} == "%"* ]] || m_fail 2 "Error:Pattern expected \"%pattern\"" 
+                    printf "%s\n" " Matching plugins available"
+                    printf "%s\n" "${C_BREAK}"
+                    P="${1#\%*}"
+                    awk -v p=${P} ' (($NF !~ /.*[.]+.*/)&&($NF !~ /^ms_/)&&($NF ~ /^m_/)&&($NF ~ p)) \
+                        {printf "\t%s\n", $NF}' FS="/" ${M_MUSE_MAP} | sort
+                else
+                    printf "%s\n" " Common plugins available"
+                    printf "%s\n" "${C_BREAK}"
+                    awk '(($NF ~ /^m_/)&&($NF !~ /.*[.]+.*/)&&($NF !~ /^ms_/)) \
+                        {printf "\t%s\n", $NF}' FS="/" ${M_MUSE_MAP} | sort
+                fi
+                m_remove_run_files
+                printf "%s\n" "${C_BREAK}"
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -lr) ## List the results sets on the server
+                shift
+                m_remove_run_files
+                if [[ -n ${1} ]] ## User wants a tagged set
+                then
+                    if m_check_file -d "${M_RUN}/${1}" 
+                    then
+                        echo "====================================================="
+                        printf "%s\n" "Tagged results found for (${1})"
+                        echo "====================================================="
+                        find "${M_RUN}"/${1}/*/m_results -type d
+                        echo "====================================================="
+                    else
+                        printf "\n%s\n\n" "No tagged results found for (${1})"
+                    fi
+                else ## No tag passed so show all results
+                    if [[ $(find "${M_RUN}"/*/*/m_results -type d 2>/dev/null | wc -l) -gt 0 ]]
+                    then
+                        echo "====================================================="
+                        printf "%s\n" "Results found"
+                        echo "====================================================="
+                        find "${M_RUN}"/*/*/m_results -type d
+                        echo "====================================================="
+                    else
+                        printf "\n%s\n\n" "No tagged results found"
+                    fi
+                fi
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -lstr) ## List files containing string
+                shift
+                m_remove_run_files
+                if [[ -n ${1} ]]
+                then
+                    for F in $(cat "${M_MUSE_MAP}")
+                    do
+                        if grep "${*}" "${F}" >/dev/null 2>&1
+                        then
+                            echo "====================================================="
+                            echo "Pattern matches (${*}) in $(basename ${F})"
+                            echo ${F}
+                            echo "====================================================="
+                            grep "${*}" "${F}" | sed 's/^ *//'
+                            echo
+                        fi
+                    done
+                else
+                    echo "Error: Variable name expected"
+                fi
+                M_ACTION=NORUN
+                return 1
+                ;;
+            -ls) ## List suite files
+                #======================================
+                # Is this a list all or 'like' search?
+                #======================================
+                shift
+                printf "%s\n" "${C_BREAK}"
+                if [[ $# -gt 0 ]] 
+                then
+                    [[ ${1} == "%"* ]] || m_fail 2 "Error:Pattern expected \"%pattern\"" 
+                    printf "%s\n" " Matching suites available"
+                    printf "%s\n" "${C_BREAK}"
+                    awk -v p="${1#\%*}" '(($NF ~ p)&&($NF !~ /.*[.]+.*/)&&($NF !~ /m_/)) \
+                        {printf "\t%s\n", $NF}' FS="/" ${M_MUSE_MAP} | sort
+                else
+                    printf "%s\n" " Common suites available"
+                    printf "%s\n" "${C_BREAK}"
+                    awk '(($NF ~ /^ms_/)&&($NF !~ /.*[.]+.*/)&&($NF !~ /^m_/)) \
+                        {printf "\t%s\n", $NF}' FS="/" ${M_MUSE_MAP} | sort
+                fi
+                m_remove_run_files
+                printf "%s\n" "${C_BREAK}"
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -s|--show) ## Show the current user tag
+                m_remove_run_files
+                printf "\n%s\n\n" "Current user tag - ${M_USR_TAG}"
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -sdb|--sdatabase) ## Find last set of results
+                m_remove_run_files
+                MDBDIR=$(tail -n 1 < <(ls -drt "${M_RUN_ROOT}/run/slave"/*/*/m_control))
+                if m_check_file -f "${MDBDIR}/slave.db"
+                then
+                    sqlite3 "${MDBDIR}/slave.db"
+                else
+                    printf "\n%s\n\n" "No database found in (${MDBDIR})"
+                fi
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -t|--tag) ## Set a user tag
+                shift
+                mkdir "/tmp/${1}" 2>/dev/null || m_fail 2 "Error: Invalid tag name passed (${FUNCNAME})"  
+                [[ -d "/tmp/${1}" ]] || m_fail 2 "Error: Failed to catch dir creation error (${FUNCNAME})" 
+                rm -rf "/tmp/${1}" || m_fail 2 "Error: Failed to remove tmp dir (${FUNCNAME})" 
+                echo "${1}" > "${M_USR_TAG_FILE}" || 
+                    m_fail 2 "Error: Failed to write tag to control file (${M_USR_TAG_FILE}) (${FUNCNAME})" 
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -vf) ## View a function 
+                shift
+                if [[ $# -eq 1 ]]
+                then
+                    #======================================
+                    # Search for the function name in all libs
+                    #======================================
+                    FUNC_FILE=""
+                    while read F
+                    do
+                        if grep "${1}" "${F}" >/dev/null 2>&1
+                        then
+                            FUNC_FILE="${F}"
+                            break
+                        fi
+                    done < <(grep ".funcs" "${M_MUSE_MAP}" | grep -v deprecated | grep -v .swp)
+
+                    if [[ -n "${FUNC_FILE}" ]]
+                    then
+                        awk -v p=${1} -v f=1 '
+                            ((f == 1) && (NR == FNR) && ($0 ~ /^## Name/) && ($NF == p)) {fs = (NR -2)}
+                            ((f == 1) && (NR == FNR) && (fs != 0) && ($0 ~ /^}/)){fe = NR;f = 2}
+                            ((NR != FNR) && (FNR >= fs) && (FNR <= fe)){print}
+                        ' "${FUNC_FILE}" "${FUNC_FILE}"
+                    else
+                        echo "Function not found"
+                    fi
+                else
+                    usage
+                fi
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -vif)
+                shift
+                if [[ $# -eq 1 ]]
+                then
+                    #======================================
+                    # Search for the function name in all libs
+                    #======================================
+                    FUNC_FILE=""
+                    while read F
+                    do
+                        if egrep "^${1}" "${F}" >/dev/null 2>&1
+                        then
+                            FUNC_FILE="${F}"
+                            break
+                        fi
+                    done < <(grep ".funcs" "${M_MUSE_MAP}" | grep -v deprecated | grep -v .swp)
+
+                    if [[ -f "${FUNC_FILE}" ]]
+                    then
+                        vi +/^${1} "${FUNC_FILE}"
+                    else
+                        echo "Function not found"
+                    fi
+                else
+                    usage
+                fi
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -vl)
+                if [[ -f "${M_LOG}" ]]
+                then
+                        vi "${M_LOG}"
+                else
+                    echo "Log not found (${M_LOG})"
+                fi
+                
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+                ;;
+
+            -vp|-vs) ## View a plugin
+                shift
+                [[ $# -eq 1 ]] || m_fail 2 "Error: Usage. Single arg expected (${FUNCNAME})" 
+                FILE=$(awk -v p="${1}" '($NF == p){print;exit}' FS="/" ${M_MUSE_MAP})
+                if [[ -r ${FILE} ]]
+                then
+                    cat ${FILE}
+                else
+                    echo "Plugin (${1}) not found"
+                fi
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -vip|-vis) ## Edit a plugin
+                shift
+                [[ $# -eq 1 ]] || m_fail 2 "Error: Usage. Single arg expected (${FUNCNAME})" 
+                FILE=$(awk -v p="${1}" '($NF == p){print;exit}' FS="/" ${M_MUSE_MAP})
+                if [[ -r ${FILE} ]]
+                then
+                    vi ${FILE}
+                else
+                    echo "Plugin (${1}) not found"
+                fi
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -x|--exec)echo "Option not coded yet";exit 1;;
+
+            *)
+                usage
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+                ;;
+        esac
+    fi
+
+    #======================================
+    # Echo  the command line into suite 1
+    # $@ i= cmd line -opts
+    #======================================
+    m_find_file ms_cmd_line M_MS_CMD_LINE
+    chmod +w "${M_MS_CMD_LINE}" || m_fail 2 "Error: chmod failed (${FUNCNAME})" 
+    printf "%s\n" "$*" > "${M_MS_CMD_LINE}" || m_fail 2 "Error: Failed to write cmd line to ms_cmd_line (${FUNCNAME})" 
+
+    #======================================
+    # Compile the object suites prior to 
+    # expansion
+    #======================================
+    if ls "${M_MS_OBJ}/"ms_* >/dev/null 2>&1
+    then
+        rm -f "${M_MS_OBJ}/"ms_* >/dev/null
+    fi
+    cp "${M_MS_CMD_LINE}" "${M_MS_OBJ}/ms_cmd_line" || m_fail 13 "Error: Copy failed for ms_cmd_line (${FUNCNAME})" 
+
+    m_compile_obj_suites "${M_MS_OBJ}/ms_cmd_line"
+
+    #======================================
+    # Now have the compiled suites so can
+    # add the obj directory to muse map
+    #======================================
+    find "${M_MS_OBJ}" -type f -name \*ms_\* > "${TMPFILE}"
+    cat "${M_MUSE_MAP}" >> "${TMPFILE}"
+    mv "${TMPFILE}" "${M_MUSE_MAP}"
+
+    #======================================
+    # Now parse the cmd line suite and all 
+    # children
+    #======================================
+    m_expand_suite ms_cmd_line 0 "" 1 1
+
+    #======================================
+    # Propagate all inline variables that 
+    # were found to the children of each suite
+    #======================================
+    m_propagate_inline_variables
+
+    #======================================
+    # Run through the exec table looking for 
+    # any plugins set to run on a variable
+    # M_RUN_HOST. If found update to value
+    # of M_RUN_HOST.
+    #======================================
+    m_update_run_hosts
+    m_get_server_list M_SERVER_LIST
+
+    #======================================
+    # Set exec_line in primary record
+    #======================================
+    m_update_exec_data 1 'exec_line' 1
+    m_set_primary_execution_thread
+   
+    #======================================
+    # If this is an EXPLAIN then no run
+    #======================================
+    if ${EXPLAIN}
+    then
+        M_ACTION=NORUN
+        m_select_lines "select name from exec where exec_type = 'plugin' order by id;" "${TMPFILE}"
+        awk -v n=1 'NF{ printf "%-5d - %s\n", n++, $NF } ' "${TMPFILE}"
+    else
+        M_ACTION=RUN
+    fi
+}
+
+##############################################################
+##
+## Name         :   m_expand_suite
+## Author       :   Bradley Atkins
+## Description  :   Expand a suite file into a list of jobs
+## Date         :   22/07/2012
+## Args         :   1 - Name of suite file
+##                  2 - Parent Suite ID
+##                  3 - Optional group id
+##                  4 - Optional WAIT
+##                  5 - Optional BG
+##                  6 - Optional Line No
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+##############################################################
+m_expand_suite()
+{
+    #======================================
+    # Validation and setup
+    #======================================
+    [[ $(echo {2..6}) == *${#}* ]] || m_fail 2 "Error: Usage arg cnt. 2 - 6 expected (${FUNCNAME})"
+    [[ ${2} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Usage args [2] (${2}) Integer expected (${FUNCNAME})" 
+
+    local JOB_HOST JOB JOB_CNT=0 CMD_LIST FQSF FQJF SUITE="${1}"  WAIT=1 BG=1 LINE= HOSTS= FQJOB= NEXT_ID=
+    local GRP_ID=0 PARENT_ID=${2} SUITE_ID= TMP= NAME= PS= ANCESTORS= CLEANFILE= LINE_NO=1 PARENT_LINE_NO=${6:-1}
+
+    m_get_tmp_file ${FUNCNAME}_${2} CLEANFILE
+
+    m_find_file "${SUITE}" FQSF
+    m_check_file -rsf "${FQSF}" || m_fail 2 "File (${SUITE}) failed permissions check -rsf (${FUNCNAME})"
+
+    ## Get rid of all the comments etc and copy to tmp file
+    m_clean_file "${FQSF}" "${CLEANFILE}"
+
+    #======================================
+    # Test for infinite recursion
+    #======================================
+    if [[ ${2} -gt 1 ]]
+    then
+        local INDX=${2}
+        while [[ ${INDX} -gt 0 ]]
+        do
+            m_get_exec_data ${INDX} "name" NAME
+            if [[ -n "${NAME}" ]]
+            then
+                ANCESTORS="$(echo ${ANCESTORS} ${NAME})"
+                [[ ${ANCESTORS} == *${1}* ]] && m_fail 2 "Error: Infinite recursion found for suite (${1}) (${FUNCNAME})" 
+            else
+                m_fail 2 "Error: Unexpected empty set returned (${FUNCNAME})" 
+            fi
+            INDX=$((INDX - 1))
+        done
+    fi
+
+    #======================================
+    # Survived validation so create a new 
+    # suite record
+    #======================================
+    m_create_exec_record ${PARENT_ID} SUITE_ID
+    m_update_exec_data ${SUITE_ID} name ${SUITE}
+    m_update_exec_data ${SUITE_ID} path "${FQSF}"
+    [[ -n ${3} ]] && m_update_exec_data ${SUITE_ID} group_id ${3}
+    [[ -n ${4} ]] && m_update_exec_data ${SUITE_ID} wait ${4}
+    [[ -n ${5} ]] && m_update_exec_data ${SUITE_ID} bg ${5}
+    m_update_exec_data ${SUITE_ID} line_no ${PARENT_LINE_NO} 
+    m_update_exec_data ${SUITE_ID} exec_type "suite"
+
+    #======================================
+    # Read each line of suite
+    #======================================
+    while read LINE
+    do
+
+        ## Look for BG on line
+        m_check_bg TMP ${LINE} && BG=0 
+        LINE=${TMP}
+
+        ## Look for WAIT on line
+        m_check_wait TMP ${LINE} && WAIT=0 
+        LINE=${TMP}
+
+        #======================================
+        # Single job on line or multiple?
+        # Multiple - implicite BG job/s in grp
+        #======================================
+        if [[ $(echo ${LINE} | m_get_line_items | wc -l) -gt 1 ]] 
+        then
+            m_get_next_grp_id GRP_ID
+            BG=0
+        else
+            #======================================
+            # Single job or suite is implicit wait
+            #======================================
+            WAIT=0
+        fi
+
+        while read JOB 
+        do
+            #======================================
+            # Check for implicit wait for single fg
+            #======================================
+            [[ $(echo ${LINE} | wc -w) -eq 1 ]] && WAIT=0
+                    
+            ## Job with any args
+            FQJOB="${JOB}"
+            ## Remove any args
+            JOB=${JOB%%(*}
+
+            if [[ ${JOB} =~ ^(ms_[[:alnum:]]+) ]]
+            then
+                ## Add suite as a member of this parent suite before exanding
+                m_get_exec_data ${SUITE_ID} member_count TMP
+                [[ ${TMP} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: member_count, integer expected [1] (${FUNCNAME})" 
+                TMP=$(( TMP + 1 ))
+                m_update_exec_data ${SUITE_ID} member_count ${TMP}
+
+                ## Get the next exec id 
+                m_get_next_exec_id NEXT_ID
+
+                #======================================
+                # Check if we have any args and parse
+                #======================================
+                m_handle_job_args ${NEXT_ID} "${FQJOB}" 
+
+                ## Now expand the new suite
+                m_expand_suite ${JOB} ${SUITE_ID} ${GRP_ID} ${WAIT} ${BG} ${LINE_NO}
+            else
+                ## Discover where the plugin will run
+                m_parse_muse_script ${JOB} G_HOSTS
+                [[ -n ${G_HOSTS} ]] || m_fail 2 "Error: Host retrieval from plugin (${JOB}) (${FUNCNAME})" 
+
+                for JOB_HOST in ${G_HOSTS}
+                do
+                    m_find_file ${JOB} FQJF
+                    ## Create a new record for the plugin
+                    m_create_exec_record ${SUITE_ID} JOB_ID
+                    m_update_exec_data ${JOB_ID} name ${JOB}
+                    m_update_exec_data ${JOB_ID} bg ${BG} 
+                    m_update_exec_data ${JOB_ID} wait ${WAIT}
+                    m_update_exec_data ${JOB_ID} group_id ${GRP_ID}
+                    m_update_exec_data ${JOB_ID} line_no ${LINE_NO} 
+                    m_update_exec_data ${JOB_ID} path ${FQJF} 
+                    m_update_exec_data ${JOB_ID} host ${JOB_HOST}
+                    m_update_exec_data ${JOB_ID} exec_type "plugin"
+
+                    ## Update suite member count for new job
+                    m_get_exec_data ${SUITE_ID} member_count TMP
+                    [[ ${TMP} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: member_count, integer expected [2] (${FUNCNAME})" 
+                    TMP=$(( TMP + 1 ))
+                    m_update_exec_data ${SUITE_ID} member_count ${TMP}
+
+                    #======================================
+                    # Check if we have any args and parse
+                    #======================================
+                    m_handle_job_args ${JOB_ID} "${FQJOB}" 
+                done
+            fi
+        done < <(echo ${LINE} | m_get_line_items)
+        
+        LINE_NO=$(( LINE_NO + 1 ))
+        WAIT=1
+        BG=1
+    done < "${CLEANFILE}"
+} 
+##############################################################
+##
+## Name         :   m_handle_job_args
+## Author       :   Bradley Atkins
+## Description  :   Check for args passed in () to job and
+##                  add them to the database var_scope table.
+##                  This is first pass only to gather in vars
+## Date         :   16/11/2014
+## Args         :   1 - id in exec table
+##                  2 - JOB Line
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_handle_job_args()
+{
+    #======================================
+    # Validate
+    #======================================
+    [[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage. Arg[1]. Integer expected. (${FUNCNAME})"
+    [[ -n "${2}" ]] || m_fail 13 "Error: Usage. Arg[2]. Value expected. (${FUNCNAME})" 
+
+    [[ ${2} =~ "-v" || ${2} =~ "-rf" ]] || return
+
+    local T=$(echo ${2#*(}) NAME= VAL= ARG= VID= FILE=
+
+    while read ARG
+    do
+        [[ ${ARG} == *'="'*'"' ]] || m_fail 13 "Error: Validation error. (${ARG}) (${2}) (${FUNCNAME})" 
+
+        #======================================
+        # Split name from value
+        #======================================
+        NAME=$(echo ${ARG} | cut -d"=" -f1)
+        VAL=$(echo ${ARG} | cut -d"=" -f2)
+
+        if [[ ${NAME} == "rf" ]]
+        then
+            #======================================
+            # This is a run file so read it in
+            #======================================
+            eval FILE=${VAL}
+            [[ -r "${FILE}" ]] || m_fail 13 "Error: Readable file expected (${FUNCNAME})" 
+
+            while read VAR
+            do
+                NAME=$(echo ${VAR} | cut -d"=" -f1)
+                VAL=$(echo ${VAR} | cut -d"=" -f2)
+                #======================================
+                # Write to var_scope table
+                #======================================
+                m_insert_variable "${NAME}" VID "${VAL}"
+                m_insert_mapping ${VID} ${1}
+            done < ${FILE}
+        elif [[ ${NAME} == "rh" ]]
+        then
+            m_fail 13 "Error: Run host file not allowed for plugins - (${2}) Use at suite level only (${FUNCNAME})" 
+        else
+            #======================================
+            # Write to var_scope table
+            #======================================
+            m_insert_variable "${NAME}" VID "${VAL}"
+            m_insert_mapping ${VID} ${1}
+        fi
+
+    done < <(echo ${T:0:$(( $(echo ${#T}) - 1 ))} | awk '{print}' RS="-v" | sed '/^$/d')
+}
+
+##############################################################
+##
+## Name         :   m_propagate_inline_variables
+## Author       :   Bradley Atkins
+## Description  :   Propogate all inline variables to all child 
+##                  suites and plugins in var_map
+## Date         :   17/11/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_propagate_inline_variables()
+{
+    local SUITE_IDS= CHILD_IDS= VAR_IDS= EXEC_IDS= SID= VID= CID=
+    m_get_tmp_file ${FUNCNAME}_1 SUITE_IDS
+    m_get_tmp_file ${FUNCNAME}_2 CHILD_IDS
+    m_get_tmp_file ${FUNCNAME}_3 VAR_IDS
+    m_get_tmp_file ${FUNCNAME}_4 EXEC_IDS
+
+    #======================================
+    # Get the id of all suites in exec table
+    #======================================
+    m_select_records "select id from exec where exec_type = 'suite' order by id asc" "${SUITE_IDS}"
+
+    #======================================
+    # Traverse each suite record
+    #======================================
+    while read SID
+    do
+        #======================================
+        # Find child suites of this suite
+        #======================================
+        m_select_records "select id from exec where parent_id = ${SID} and exec_type = 'suite'" "${CHILD_IDS}"
+        #======================================
+        # Find any vars belonging to parent
+        #======================================
+        m_select_records "select var_scope_id from var_map where exec_id = ${SID}" "${VAR_IDS}"
+        #======================================
+        # If parent has vars then propagate to
+        # children
+        #======================================
+        while read CID
+        do
+            while read VID
+            do
+                #======================================
+                # Map the var to the child suite
+                #======================================
+                m_insert_mapping ${VID} ${CID}
+            done < "${VAR_IDS}"
+        done < "${CHILD_IDS}"
+    done < "${SUITE_IDS}"
+
+    #======================================
+    # All suites updated now propagate to
+    # the plugins within them
+    #======================================
+    while read SID
+    do
+        #======================================
+        # Find child plugins of this suite
+        #======================================
+        m_select_records "select id from exec where parent_id = ${SID} and exec_type = 'plugin'" "${CHILD_IDS}"
+        #======================================
+        # Find any vars belonging to parent
+        #======================================
+        m_select_records "select var_scope_id from var_map where exec_id = ${SID}" "${VAR_IDS}"
+        #======================================
+        # If parent has vars then propagate to
+        # children
+        #======================================
+        while read CID
+        do
+            while read VID
+            do
+                #======================================
+                # Map the var to the child suite
+                #======================================
+                m_insert_mapping ${VID} ${CID}
+            done < "${VAR_IDS}"
+        done < "${CHILD_IDS}"
+    done < "${SUITE_IDS}"
+    
+}
+
+#======================================
+# Job parsing Functions
+#======================================
+
+##############################################################
+##
+## Name         :   m_update_run_hosts
+## Author       :   Bradley Atkins
+## Description  :   Parse the exec table looking for host =
+##                  M_RUN_HOST. If found then find the value in
+##                  the var_scope table and set the host = to
+##                  the value in exec table.
+## Date         :   23/11/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_update_run_hosts()
+{
+    local HOSTVARS= NAME= VALUE= ID= SERVER= FQDN=
+    m_get_tmp_file ${FUNCNAME}_1 HOSTVARS
+    m_get_tmp_file ${FUNCNAME}_2 TMPFILE
+
+    m_select_records "select name, value, vm.exec_id from var_scope vs join var_map vm on vs.var_scope_id = vm.var_scope_id where vm.exec_id in (select id from exec where host = 'M_RUN_HOST');" "${HOSTVARS}"
+
+    while read NAME VALUE ID
+    do
+        if [[ "${NAME}" == "M_RUN_HOST" ]]
+        then
+            #======================================
+            # This might be a short name or IP etc
+            #======================================
+            echo "## M_JOB_HOST ${VALUE}" > "${TMPFILE}"
+            m_get_run_hosts "${TMPFILE}" FQDN
+
+            m_update_exec_data ${ID} "host" $(echo "${FQDN}" | cut -d" " -f 1)
+        fi
+    done < <(cat "${HOSTVARS}" | tr "|" " " | sed 's/"//g')
+}
+
+##############################################################
+##
+## Name         :   m_add_job_control_record
+## Author       :   Bradley Atkins
+## Description  :   Create a new record for a job in the master db
+## Date         :   25/08/2013
+## Args         :   1 - Name of Job
+##                  2 - Suite ID
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_add_job_control_record()
+{
+    #======================================
+    # Setup and validation
+    #======================================
+    [[ $# -eq 2 ]] || m_fail 2 "Error: Usage arg cnt. 2 expected (${FUNCNAME})"
+    local FQFN RUN_HOST 
+
+    #======================================
+    # Does a valid job exist?
+    #======================================
+    m_find_file "${1}" FQFN || m_fail 2 "Error: Failed to find file (${1}) (${FUNCNAME})" 
+    m_check_file -rxs "${FQFN}" || m_fail 2 "Error Job file validation (${FQFN}) (${FUNCNAME})"
+
+    #======================================
+    # Add the record to the master DB
+    #======================================
+    m_create_job_record M_JOB_ID 
+    m_update_all_job_data ${M_JOB_ID} ${1} "${FQFN}" ${M_JOB_HOST} 0 ${2} 0 0 1 1 
+
+}
+
+##############################################################
+##
+## Name         :   m_check_bg
+## Author       :   Bradley Atkins
+## Description  :   Helper script to check if a group or 
+##                  job runs in bg
+## Date         :   30/08/2012
+## Args         :   1 - Name of var to return line in
+##                  2 - Line from suite file
+##                  Return 0 if BG
+## Status       :   Reviewed    [y]
+##                  Tested      [y]
+##                  Released    [n]
+##############################################################
+m_check_bg()
+{
+    local LINE EC=2 VAR=${1}
+    shift
+
+    if [[ -n $(echo $@ | egrep '( BG|BG )') ]]  
+    then
+        LINE=$(echo "$@" | sed 's/BG//g;s/^[ \t]*//;s/[ \t]*$//')
+        EC=0
+    else
+        LINE=$(echo $@)
+    fi
+    eval ${VAR}='${LINE}'
+    return ${EC}
+}
+##############################################################
+##
+## Name         :   m_check_wait
+## Author       :   Bradley Atkins
+## Description  :   Helper script to check if a group or 
+##                  job requires a wait
+## Date         :   30/08/2012
+## Args         :   1 - Line of jobs from suite file. 
+##                  2 - Var to return line in
+##                  Return 0 if WAIT
+## Status       :   Reviewed    [y]
+##                  Tested      [y]
+##                  Released    [n]
+##############################################################
+m_check_wait()
+{
+    local LINE EC=2 VAR=${1}
+    shift
+
+    if [[ -n $(echo $@ | egrep '( WAIT|WAIT )') ]] 
+    then
+        LINE=$(echo "$@" | sed 's/WAIT//g;s/^[ \t]*//;s/[ \t]*$//')
+        EC=0
+    else
+        LINE=$(echo $@)
+    fi
+    eval ${VAR}='${LINE}'
+    return ${EC}
+}
+
+#======================================
+# File Handling functions
+#======================================
+
+##############################################################
+##
+## Name         :   m_remove_run_files
+## Author       :   Bradley Atkins
+## Description  :   After a non executing command we don't
+##                  want to keep our runtime files and dirs
+## Date         :   27/08/2012
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_remove_run_files()
+{
+    [[ -d "${M_RUN_DIR}" ]] && rm -rf "${M_RUN_DIR}/"
+}
+##############################################################
+##
+## Name         :   m_get_exp_file
+## Author       :   Bradley Atkins
+## Description  :   Create an expected results file with a unique name.
+## Date         :   28/08/2012
+## Args         :   1 - Name of function or script requiring file
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_exp_file()
+{
+    [[ $# -eq 1 ]] || exit 1
+
+    local FILE="${M_NEWEXP}/${1}_${RANDOM}.exp"
+
+    :>"${FILE}" || exit 2
+
+    echo "${FILE}"
+}
+##############################################################
+##
+## Name         :   m_get_file_data
+## Author       :   Bradley Atkins
+## Description  :   Clean the output of the find | ls command
+##                  Cut out the time stamps etc just leaving
+##                  perms owner grp size and path. First two params
+##                  are optional. Complexity arises from requirement to 
+##                  handle files and dirs with escape sequences and spaces
+##                  in the names.
+## Date         :   19/09/2012
+## Args         :   1 - -s Optional Sort by file or directory name
+##                  2 - -d Optional find of directories (Defaults to files)
+##                  3 - -min Optional min depth for find
+##                  4 - -max Optional max depth for find
+##                  5 - Top level directory for find
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_file_data()
+{
+    [[ $# > 7 ]] && m_fail 1 "Error: Usage args (${FUNCNAME})"  
+
+    local SORT="cat" OPT="-l" TYPE="f" MIN_D= MAX_D= 
+
+    while [[ $# > 1 ]]
+    do
+        case ${1} in
+            -s) SORT="sort -k5";;
+            -d) TYPE="d";OPT="-ld";;
+            -min)
+                shift 
+                [[ ${1} =~ ^[[:digit:]]+$ ]] || 
+                    m_fail 1 "Error: Min depth param (${FUNCNAME})" 
+                MIN_D="-mindepth ${1}"
+                ;;
+            -max)
+                shift 
+                [[ ${1} =~ ^[[:digit:]]+$ ]] || 
+                    m_fail 1 "Error: Max depth param (${FUNCNAME})"
+                MAX_D="-maxdepth ${1}"
+                ;;
+            *) m_fail 1 "Error: Unrecognised option (${1}) (${FUNCNAME})";;
+        esac
+        shift
+    done
+
+    [[ -d "${1}" ]] || m_fail 1 "Error: Not a directory (${1}) (${FUNCNAME})" 
+
+    awk '{
+        lo=""
+        for (i = 1; i <= NF; i++){
+            if (i <= 5)
+                if (i != 2)
+                    lo = lo" "$i
+
+            if ($i ~ /\//){
+                sub(/ */, " ", $0)          
+                printf lo" "$0"\n"
+                next
+            }
+            $i = ""
+        }
+    }' <(find "${1}" ${MIN_D} ${MAX_D} -type ${TYPE} | sed 's#\\#\\\\#g' | xargs -i ls ${OPT} "{}") | ${SORT}
+}
+
+
+#======================================
+# Slave Handling
+#======================================
+
+##############################################################
+##
+## Name         :   m_launch_slaves
+## Author       :   Bradley Atkins
+## Description  :   Launch a slave on each remote server for 
+##                  this MUSE run   
+## Date         :   20/07/2013
+## Args         :   1 - List of hosts
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_launch_slaves()
+{
+    [[ $# -ge 1 ]] || m_fail 2 "Error: Usage args. > 0 expected (${FUNCNAME})"
+
+    local HOST= MSG_FILE= SLAVE= SLAVE_MD5=
+
+    m_find_file slave SLAVE
+    SLAVE_MD5=$(md5sum "${SLAVE}" | cut -d" " -f1)
+
+    for HOST in ${1}
+    do
+        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Launching slave (${HOST})" "INFO"
+        ssh ${M_SSH_OPTS} ${M_SLAVE_USR}@${HOST} " "${M_MASTER_HOST}" "${M_MSG_IN_BUFFER}" "${M_SYS_TAG}" "${M_USR_TAG}"  \
+            "${M_DEV_ROOT}" "${M_RUN_ID}" "${M_SESSION_ID}" "${M_RUN_MODE}" "${M_IS_DEVELOPER}" "${M_LOG_LEVEL}" "${SLAVE_MD5}" \
+            "${M_RPT_IN_BUFFER}" " >/dev/null 2>&1
+    done
+}
+
+##############################################################
+##
+## Name         :   m_confirm_master_core
+## Author       :   Bradley Atkins
+## Description  :   Confirm all states are true for running
+## Date         :   24/01/2015
+## Args         :   
+## Status       :   Reviewed        [n]
+##                  Tested          [n]
+##                  Released        [n]
+##############################################################
+m_confirm_master_core()
+{
+    local VAR
+    #======================================
+    # Check state of core components
+    #=====================================
+    m_read_state "TX_OK" || return 1
+    m_read_state "RX_OK" || return 1
+    m_read_state "COMMS_OK" || return 1
+    m_read_state "CNXNS_OPEN" || return 1
+    m_read_state "SLAVES_LOADED_DUMP" || return 1
+    return 0
+}
+
+##############################################################
+##
+## Name         :   m_confirm_master_state
+## Author       :   Bradley Atkins
+## Description  :   Confirm all states are true for running
+## Date         :   02/08/2013
+## Args         :       
+## Status       :   Reviewed        [n]
+##                  Tested          [n]
+##                  Released        [n]
+##############################################################
+m_confirm_master_state()
+{
+    local VAR
+    #======================================
+    # Check state of core componenets
+    #======================================
+    m_read_state "SLAVES_REGISTERED" || return 1
+    m_read_state "DUMP_DISPATCHED" || return 1
+    m_read_state "TX_OK" || return 1
+    m_read_state "RX_OK" || return 1
+    m_read_state "COMMS_OK" || return 1
+    m_read_state "CNXNS_OPEN" || return 1
+    m_read_state "SLAVES_LOADED_DUMP" || return 1
+    return 0
+}
+
+##############################################################
+##
+## Name         :   m_verify_slaves_registered
+## Author       :   Bradley Atkins
+## Description  :   Verify that all slaves have established 
+##                  comms with the master. Each server in 
+##                  M_SERVER_LIST should be in slave_register
+## Date         :   22/04/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_verify_slaves_registered()
+{
+    #======================================
+    # Loop through the server list. If any 
+    # not registered then return false
+    #======================================
+    local IS_REGISTERED= SERVER=
+    M_SLAVE_TALLY=0
+    for SERVER in ${M_SERVER_LIST}
+    do
+        IS_REGISTERED="NO"
+        m_select_slave_data "is_registered" "slave" "${SERVER}" IS_REGISTERED
+        [[ "${IS_REGISTERED}" == "YES" ]] || return 1
+        M_SLAVE_TALLY=$(( M_SLAVE_TALLY + 1 ))
+    done
+
+    return 0
+}
+##############################################################
+##
+## Name         :   m_test_for_new_line
+## Author       :   Bradley Atkins
+## Description  :   Test if a suite line pointed to by an exec_line
+##                  field is fresh or already running. If any 
+##                  member has a start time, line is not new.
+## Date         :   11/05/2014
+## Args         :   1 - File containing record ids
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_test_for_new_line()
+{
+    [[ $# -eq 1 ]] || m_fail 2 "Error: Usage. Arg count. 1 expected (${FUNCNAME})" 
+    [[ -r ${1} ]] || m_fail 2 "Error: Usage. Args [1]. Readable file expected. (${FUNCNAME})" 
+
+    local ID= ST=
+
+    read ID < "${1}"
+    [[ ${ID} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: integer expected (${FUNCNAME})" 
+
+    m_get_exec_data ${ID} start_time ST
+
+    [[ ${ST} =~ ^[[:digit:]]+$ ]] && return 1
+
+    return 0
+}
+
+##############################################################
+##
+## Name         :   m_test_for_completed_line
+## Author       :   Bradley Atkins
+## Description  :   Test to see if all members of a suite line
+##                  have a finish time set.
+## Date         :   11/05/2014
+## Args         :   1 - File containing record ids
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_test_for_completed_line()
+{
+    [[ $# -eq 1 ]] || m_fail 2 "Error: Usage. Arg count. 1 expected (${FUNCNAME})" 
+    [[ -r ${1} ]] || m_fail 2 "Error: Usage. Args [1]. Readable file expected. (${FUNCNAME})" 
+    
+    local ID= FT=
+
+    while read ID
+    do
+        [[ ${ID} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Integer expected from file (${1}) (${FUNCNAME})" 
+        m_get_exec_data ${ID} finish_time FT
+        [[ ${FT} =~ ^[[:digit:]]+$ ]] || return 1
+    done < "${1}"
+    
+    return 0
+}
+##############################################################
+##
+## Name         :   m_check_for_rpts_in_buffer
+## Author       :   Bradley Atkins
+## Description  :   Check to see if any new reports in buffer
+##                  If found then move one only to pending and
+##                  return the file name in arg [1]
+## Date         :   14/06/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_check_for_rpts_in_buffer()
+{
+    [[ $# -eq 1 ]] || m_fail 2 "Error: Usage. Args. Count. 1 expected. (${FUNCNAME})" 
+    [[ ${1} =~ ^[A-Z0-9_]+$ ]] || m_fail 2 "Error: Usage. Args [1]. MUSE var expected. (${FUNCNAME})"
+    [[ -d "${M_RPT_IN_BUFFER}" ]] || m_fail 2 "Error: Report in buffer not defined (${FUNCNAME})" 
+    [[ -d "${M_RPT_IN_PENDING}" ]] || m_fail 2 "Error: Report pending buffer not defined (${FUNCNAME})" 
+
+    local SMP="$(head -n 1 < <(ls -1 "${M_RPT_IN_BUFFER}/"*".${M_MSG_OK}" 2>/dev/null))" 
+    local RPT="${SMP%.${M_MSG_OK}*}"
+    local RPT_BN="$(basename "${RPT}")"
+
+    if [[ -n ${SMP} ]]
+    then
+        if [[ -f "${RPT}" ]]
+        then
+            mv "${RPT}" "${M_RPT_IN_PENDING}/" || m_fail 2 "Error: Failed to move report (${RPT}) (${FUNCNAME})" 
+            mv "${SMP}" "${M_RPT_IN_PENDING}/" || m_fail 2 "Error: Failed to move semaphore (${SMP}) (${FUNCNAME})" 
+            eval ${1}="${M_RPT_IN_PENDING}/${RPT_BN}"
+            return 0
+        else
+            #======================================
+            # This would be an error in a slave
+            #======================================
+            m_fail 1 "Error: Semaphore found (${SMP}) without report (${FUNCNAME})"
+        fi
+    fi
+    return 1
+}
+##############################################################
+##
+## Name         :   m_fail
+## Author       :   Bradley Atkins
+## Description  :   Handle errors for the master.
+##                  Error Levels
+##                  1 - Non fatal error. Unlikely
+##                  2 - Fatal error. As the system is cmpromised
+##                  we need to exit without referencing any 
+##                  functions that can call m_fail.
+## Date         :   20/06/2014
+## Args         :   1 - Error level
+##                  2 - Error msg
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_fail()
+{
+    #======================================
+    # In case of an internal defect. Stop 
+    # any recursive calls so we can exit.
+    #======================================
+
+    if ${M_NO_ERROR_RECURSION}
+    then
+        return 0
+    fi
+    
+    case ${1} in
+        1)  
+            #======================================
+            # Error in plugin on slave is not fatal
+            #======================================
+            m_log_msg "${2}" "ERROR"            
+            m_write_action "ACT" "HANDLE_NON_FATAL_ERROR"
+            m_set_action_payload "${2}" "HANDLE_NON_FATAL_ERROR"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "${2}" "ERROR"
+        ;;
+        2)  
+            #======================================
+            # Serious error in plugin on slave. User
+            # has elected to halt on error
+            #======================================
+            m_log_msg "${2}" "ERROR"            
+            m_write_action "ACT" "HANDLE_FATAL_ERROR"
+            m_set_action_payload "${2}" "HANDLE_FATAL_ERROR"
+        ;;
+        3)  
+            #======================================
+            # Fatal error in state machine such as 
+            # a defect. SM cant be trusted to exit
+            # cleanly. In this case we are expecting
+            # the calling function to eventually set
+            # a 13 error code. So we end up with a 
+            # stack trace
+            #======================================
+            m_log_msg "${2}" "ERROR"            
+            m_write_action "ACT" "HANDLE_FATAL_ERROR"
+            m_set_action_payload "${2}" "HANDLE_FATAL_ERROR"
+        ;;
+        13|*)  
+            #======================================
+            # Fatal error in state machine such as 
+            # a defect. SM cant be trusted to exit
+            # cleanly so force exit. Or a unhandled 
+            # exit code.
+            #======================================
+            M_NO_ERROR_RECURSION=true
+            echo "Internal error in master (${2}). Emergency exit without slave shutdown"
+            exec "${M_EXEC_FAILURE}"
+        ;;
+    esac 
+}
+
+##############################################################
+##
+## Name         :   m_get_line_items
+## Author       :   Bradley Atkins
+## Description  :   Retrieve the items on a line from a suite.
+##                  Expects the line to be echoed in via pipe
+## Date         :   14/10/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_line_items()
+{
+    awk '
+        function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
+        function rtrim(s) { sub(/[ \t\r\n]+$/, "", s); return s }
+        function trim(s) { return rtrim(ltrim(s)); }
+        {
+            split($0, line, "")
+            s = trim($0)
+            nob = ncb = 0; item = ""
+
+        for (i = 1; i <= length(s); i++){
+            item = sprintf("%s%s", item, ""line[i])
+            if (line[i] == "(") nob++
+            if (line[i] == ")") ncb++
+            if ( (line[i] == " " || (i == length(s)) ) && (nob == ncb) ){
+                printf "%s\n", item
+                nob = ncb = 0; item = ""
+            }
+        }
+    }END{
+        if (item != "") printf "%s\n", "Error"
+    }'
+}
+##############################################################
+##
+## Name         :   m_get_server_list
+## Author       :   Bradley Atkins
+## Description  :   Retrieve the list of servers we are going to 
+##                  connect to in this run
+## Date         :   23/11/2014
+## Args         :   1 - Variable to return results
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_server_list()
+{
+    [[ ${1} =~ ^[A-Z0-9_]+$ ]] || m_fail 2 "Error: Usage. Args [1]. MUSE var expected. (${FUNCNAME})"
+
+    local SERVER_LIST= HOST= HOSTS=
+    m_get_tmp_file ${FUNCNAME} SERVER_LIST
+
+    m_select_records "select distinct(host) from exec where exec_type = 'plugin';" "${SERVER_LIST}"
+
+    while read HOST
+    do
+        HOSTS="${HOSTS} ${HOST}"
+    done < "${SERVER_LIST}"              
+
+    eval ${1}=\"${HOSTS}\"
+}
+
+##############################################################
+##
+## Name         :   m_send_vars_to_slaves
+## Author       :   Bradley Atkins
+## Description  :   Send our exported tables to each slave so
+##                  that they can import them for scope ctl
+## Date         :   23/11/2014
+## Args         :   1 - File name for table dump
+##                  2 - List of slaves
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_send_vars_to_slaves()
+{
+    [[ -r "${1}" ]] || m_fail 2 "Error: Usage. Arg[1] Readable file expected (${FUNCNAME})" 
+    [[ $# -ge 2 ]] || m_fail 2 "Error: Usage. Server name[s] expected (${FUNCNAME})" 
+
+    local BUF= CNXN= SERVER= SQLF="${1}" INBUFFER= MD5=$(md5sum "${1}")
+    shift
+
+    #======================================
+    # Send the table dump to slaves
+    #======================================
+    for SERVER in $*
+    do
+        m_select_slave_data "in_buffer" "slave" "${SERVER}" BUF
+        CNXN="${M_CNXN_DIR}/${M_MSG_USR}@${SERVER}:22"
+        cat "${SQLF}" | ssh -S "${CNXN}" ${M_MSG_USR}@${SERVER} "${BUF}/$(hostname).sql" || 
+            m_fail 2 "Error: Failed to send sql file to server (${SERVER}) (${FUNCNAME})" 
+        echo "${MD5}" | ssh -S "${CNXN}" ${M_MSG_USR}@${SERVER} "${BUF}/$(hostname).sql.${M_MSG_OK}" || 
+            m_fail 2 "Error: Failed to send semaphore to server (${SERVER}) (${FUNCNAME})" 
+    done
+}
+##############################################################
+##
+## Name         :   m_select_run_dir
+## Author       :   Bradley Atkins
+## Description  :   Prompt the user to select on of the run dirs
+##                  e.g. M_CONTROL, M_RESULTS etc
+## Date         :   03/01/2015
+## Args         :   1 - [-m|-s] Optional master or slave
+##                  2 - [-c|-e|-n|-r|-t] Run directory type
+##                      c = m_control
+##                      e - m_exec
+##                      n = m_newexp
+##                      r = m_results
+##                      t = m_tmp
+##                  3 - Var to return path to selected directory
+##                  4 - Var to return usr tag
+##                  5 - Var to return sys tag
+##                  6 - Optional user tag
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_select_run_dir()
+{
+    #======================================
+    # Validate
+    #======================================
+    [[ $# -ge 5 ]] || m_fail 13 "Error: Usage. Arg count. 5 or 6 expected. (${FUNCNAME})" 
+    [[ (${1} == "-m") || (${1} == "-n") ]] || m_fail 13 "Error: Usage. Arg[1] -m or -n expected (${FUNCNAME})" 
+    [[ (${2} == "-c") || (${2} == "-e") || (${2} == "-n") || (${2} == "-r") || (${2} == "-t") ]] || 
+        m_fail 13 "Error: Usage. Arg[2] -c or -e or -n or -r or -t expected (${FUNCNAME})" 
+    [[ ${3} =~ ^[A-Z0-9_]+$ ]] || m_fail 13 "Error: Usage. Arg[3] MUSE var name expected (${FUNCNAME})" 
+    [[ ${4} =~ ^[A-Z0-9_]+$ ]] || m_fail 13 "Error: Usage. Arg[4] MUSE var name expected (${FUNCNAME})" 
+    [[ ${5} =~ ^[A-Z0-9_]+$ ]] || m_fail 13 "Error: Usage. Arg[5] MUSE var name expected (${FUNCNAME})" 
+
+    local RUN="${M_RUN}" TYPE= F= OPT= OPTIONS USRTAG=${6:-*}
+    declare -a OPTIONS
+
+    [[ ${1} == "-s" ]] && RUN=$(echo $M_RUN | awk '{$NF = "slave";print}' FS='/' OFS='/')
+    case ${2} in
+        "-c") TYPE="m_control";;
+        "-e") TYPE="m_exec";;
+        "-n") TYPE="m_newexp";;
+        "-r") TYPE="m_results";;
+        "-t") TYPE="m_tmp";;
+    esac
+
+    #======================================
+    # Put the directories in menu form
+    #======================================
+    PS3="Select a directory:"
+    for F in $(ls -rtd "${RUN}/"${USRTAG}/*/${TYPE} 2>/dev/null)
+    do
+        ## Exclude the current run dir
+        [[ "${F}" == "${M_RUN_DIR}/${TYPE}" ]] && continue
+        OPTIONS=("${OPTIONS[@]}" "${F}")
+    done
+
+    if [[ ${#OPTIONS[@]} -gt 0 ]]
+    then
+        select OPT in "${OPTIONS[@]}" "Quit"
+        do
+            case ${REPLY} in
+                $(( ${#OPTIONS[@]}+1 )) ) return 1;;
+                *) eval ${3}="${OPT}"; break;;
+            esac
+        done
+        eval ${4}=$(echo "${OPT}" | awk '{print $(NF - 2)}' FS='/')
+        eval ${5}=$(echo "${OPT}" | awk '{print $(NF - 1)}' FS='/')
+    fi
+
+}
+##############################################################
+##
+## Name         :   m_compile_obj_suites
+## Author       :   Bradley Atkins
+## Description  :   Copy suite to M_MS_OBJ/ and expand if it 
+##                  refers to a hosts file for its M_RUN_HOST
+##                  parameters. e.g. -v rh="path"
+## Date         :   14/02/2015
+## Args         :   1 - Suite to expand
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_compile_obj_suites()
+{
+    [[ $# -eq 1 ]] || m_fail 13 "Error: Usage. Arg Count. 1 expected. (${FUNCNAME})"
+    [[ -f ${1} ]] || m_fail 13 "Error: Usage. Args[1]. (${1}) MUSE Suite expected (${FUNCNAME})" 
+
+    local HFILE= TMPFILE= TMPFILE1= TMPFILE2= TMPFILE3= SNAME=${1} HLINE="" LINE="" NEWLINE="" ITEM="" FQITEM= VITEM= NITEM= NEWITEM= FQNEWITEM=
+    local HNAME= HVALUE= TMP= BG=false THIS_OBJ_INDX= OSUITE= NSUITE= FQNSUITE= NEWINDX=
+    
+    m_get_unique_tmp_file ${FUNCNAME} TMPFILE1
+    m_get_unique_tmp_file ${FUNCNAME} TMPFILE2
+    m_get_unique_tmp_file ${FUNCNAME} TMPFILE3
+    m_get_unique_tmp_file ${FUNCNAME} NSUITE
+
+    #======================================
+    # Suite already copied to m_ms_obj
+    # make writable
+    #======================================
+    chmod +w "${SNAME}" || m_fail 13 "Error: Chmod Failed (${FUNCNAME})" 
+    OSUITE="${SNAME}"
+    
+    #======================================
+    # Read each line from suite copy in obj
+    # and write to NSUITE
+    #======================================
+    while read LINE
+    do
+        #======================================
+        # If a comment line then just echo it
+        # until we are past the header
+        #======================================
+        if [[ "${LINE}" == *#* ]] ## TODO check if just first char
+        then
+            echo "${LINE}" >> "${NSUITE}"
+            continue
+        fi
+
+        #NEWLINE=""
+        
+        #======================================
+        # If this a BG line then expand to multi 
+        # hosts on one line otherwise mulit lines
+        #======================================
+        BG=false
+        [[ $(echo ${LINE} | m_get_line_items | wc -l) -gt 1 ]] && BG=true
+        [[ ${LINE} == *BG* ]] && BG=true
+
+        #======================================
+        # Read each item on line
+        #======================================
+        while read ITEM
+        do
+            NITEM=${ITEM%%(*} ## Item without args
+            VITEM=$(echo "${ITEM}" | awk '{print $2}' FS="${NITEM}") ## args without name
+
+            if [[ ${NITEM} =~ ^(ms_[[:alnum:]]+) ]]
+            then
+
+                #======================================
+                # Copy the new suite to the obj dir
+                #======================================
+                m_find_file "${NITEM}" TMPFILE1
+                NEWITEM="${NITEM}_${RANDOM}"
+                FQNEWITEM="${M_MS_OBJ}/${NEWITEM}"
+
+                #======================================
+                # Rename the suite in the parent
+                #======================================
+                if [[ -n "${VITEM}" ]]
+                then
+                    FQITEM="${NEWITEM}${VITEM}"
+                else
+                    FQITEM="${NEWITEM}"
+                fi
+
+                if [[ ${FQITEM} =~ "rh=" ]]
+                then ## Suite with run host file needs expansion
+                    #======================================
+                    # Get the host file from the args
+                    #======================================
+                    m_get_host_file_from_args "${FQITEM}" HFILE
+                    [[ -r "${HFILE}" ]] || m_fail 2 "Error: Host File (${HFILE}) not readable (${FUNCNAME})" 
+
+                    #======================================
+                    # Read in each M_RUN_HOST
+                    #======================================
+                    while read HLINE
+                    do
+                        #======================================
+                        # Confirm we have valid M_RUN_HOST lines
+                        #======================================
+                        HNAME=$(echo ${HLINE} | cut -d"=" -f1)
+                        HVALUE=$(echo ${HLINE} | cut -d"=" -f2)
+                        [[ "${HNAME}" == "M_RUN_HOST" ]] || 
+                            m_fail 13 "Error: Run host variable name failed validation. M_RUN_HOST expected. (${FUNCNAME})" 
+                        [[ -n "${HVALUE}" ]] || m_fail 13 "Error: Value expected for run host (${FUNCNAME})" 
+                        
+                        #======================================
+                        # For each run host create a new instance
+                        # of the suite and add a new item to parent
+                        # suite line for it. change its rh= item
+                        # to M_RUN_HOST= in parent suite.
+                        #======================================
+                        NEWINDX=${RANDOM}
+                        TMP=$(echo "${FQITEM}" | awk -v  name="${NITEM}" -v val="${HVALUE}" -v indx="${NEWINDX}" '{
+                            str = name "_" indx "("
+                            for (v = 2; v <= NF; v++){
+                                if ($v ~ /rh=/){
+                                    str = str " -v M_RUN_HOST=" val
+                                }else{
+                                    str = str " -v " $v
+                                }
+                            }
+                            if ( substr(str, length(str), 1) == ")" )
+                                printf "%s\n", str
+                            else
+                                printf "%s)\n", str
+                        }' FS="-v")
+                        
+                        #======================================
+                        # If consecutive fg then split line in 
+                        # parent suite.
+                        #======================================
+                        if ${BG}
+                        then
+                            NEWLINE="${NEWLINE} ${TMP}"
+                        else
+                            echo "${TMP}" >> "${NSUITE}"
+                        fi
+
+                        #======================================
+                        # Make a new copy of the suite in obj
+                        # dir and rename it to match above
+                        #======================================
+                        #m_find_file "${NITEM}" TMPFILE1
+                        NEWITEM="${NITEM}_${NEWINDX}"
+                        FQNEWITEM="${M_MS_OBJ}/${NEWITEM}"
+                        cp "${TMPFILE1}" "${FQNEWITEM}"
+                        [[ "${NITEM}" != "ms_cmd_line" ]] && sed -i 's/\(##.*\)'"${NITEM}"'/\1'"${NEWITEM}"'/g' "${FQNEWITEM}"
+                        m_compile_obj_suites "${FQNEWITEM}"
+                    done < "${HFILE}"
+
+                else
+                    #======================================
+                    # Suite without rh= variable
+                    #======================================
+                    cp "${TMPFILE1}" "${FQNEWITEM}"
+                    [[ "${NITEM}" != "ms_cmd_line" ]] && sed -i 's/\(##.*\)'"${NITEM}"'/\1'"${NEWITEM}"'/g' "${FQNEWITEM}"
+                    m_compile_obj_suites "${FQNEWITEM}"
+                    NEWLINE="${NEWLINE} ${FQITEM}"
+                fi
+            
+            else ## Plugin, BG or WAIT so no processing
+                NEWLINE="${NEWLINE} ${ITEM}"
+            fi
+        done < <(echo "${LINE}" | m_get_line_items)
+        
+        #======================================
+        # Write the new line/s to the new suite
+        #======================================
+        echo "${NEWLINE}" >> "${NSUITE}"
+        
+        NEWLINE=""
+
+
+    done < "${OSUITE}" ## Fully qualified name of obj suite
+
+    
+    cp "${NSUITE}" "${OSUITE}"
+}
+
+##############################################################
+##
+## Name         :   m_get_host_file_from_args
+## Author       :   Bradley Atkins
+## Description  :   Return the host file from a suite arg rh=
+## Date         :   14/02/2015
+## Args         :   1 - Suite name with args
+##                  2 - MUSE VAR to return file path
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_host_file_from_args()
+{
+    #======================================
+    # Validate
+    #======================================
+    [[ $# -eq 2 ]] || m_fail 13 "Error: Usage. Arg count. 2 expected.  (${FUNCNAME})" 
+    [[ -n "${1}" ]] || m_fail 13 "Error: Usage. Arg[2]. Value expected. (${FUNCNAME})" 
+    [[ ${2} =~ ^[A-Z0-9_]+$ ]] || m_fail 13 "Error: Usage. Args [2]. MUSE variable expected. (${FUNCNAME})" 
+
+    local T=$(echo ${1#*(}) NAME= VAL= ARG= 
+
+    #======================================
+    # Only allow one host file per suite
+    #======================================
+    [[ $(echo ${1} | awk '{print NF}' FS="rh=") -eq 2 ]] || 
+        m_fail 13 "Error: Only one host file per suite allowed. Consider concatonating. (${FUNCNAME})" 
+    
+    while read ARG
+    do
+        
+        [[ ${ARG} == *'="'*'"' ]] || m_fail 13 "Error: Validation eror. (${ARG})  (${FUNCNAME})" 
+
+        #======================================
+        # Split name from value
+        #======================================
+        NAME=$(echo ${ARG} | cut -d"=" -f1)
+        VAL=$(echo ${ARG} | cut -d"=" -f2)
+
+        if [[ ${NAME} == "rh" ]]
+        then
+            #======================================
+            # This is a host file so return it
+            #======================================
+            eval ${2}="${VAL}"
+            return
+        fi
+    done < <(echo ${T:0:$(( $(echo ${#T}) - 1 ))} | awk '{print}' RS="-v" | sed '/^$/d')
+
+    eval ${2}=""
+}
+

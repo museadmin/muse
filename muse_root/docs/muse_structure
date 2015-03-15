@@ -1,0 +1,75 @@
+##############################################################
+##
+## Name         :       muse_structure
+## Author       :       Bradley Atkins
+## Description  :       Notes on the directory structures in muse
+## Date         :       30/07/2013
+## Args         :       
+## Status       :       Reviewed        [n]
+##                      Tested          [n]
+##                      Released        [n]
+##############################################################
+
+#======================================
+# Master Directories
+#======================================
+/var/tmp/muse/m_system                                                          ## System files like muse.map
+/var/tmp/muse/m_system/master_results_processing_q                              ## Results waiting for processing 
+/var/tmp/muse/m_system/master_run_file                                          ## Main runtime variables. (Set default behaviors like clear tmp files on completion)
+/var/tmp/muse/m_system/m_muse_map                                               ## Main map is overwritten every run
+/var/tmp/muse/m_system/m_usr_tag_file                                           ## Holds the current user tag. ("default" by default)
+/var/tmp/muse/m_system/muse.ctl                                                 ## Echo stop to shut down main state machine
+/var/tmp/muse/m_system/m_msg_file                                               ## Msg file for msgs from slave
+/var/tmp/muse/m_system/m_action_file                                            ## Action file for state machine
+/var/tmp/muse/run/                                                              ## Top level run time directory
+/var/tmp/muse/run/<User tag>/<system tag>/                                      ## Top level for specific run files
+/var/tmp/muse/run/<User tag>/<system tag>/m_results                             ## The results files from the slaves
+/var/tmp/muse/run/<User tag>/<system tag>/m_control                             ## The control files for the run
+/var/tmp/muse/run/<User tag>/<system tag>/m_tmp                                 ## Tmp files for run
+/var/tmp/muse/run/<User tag>/<system tag>/m_newexp                              ## Expected results files generated during run
+/tmp/muse_include_register                                                      ## Track our includes
+
+#======================================
+# Slave Directories. 
+# The insertion of FQDN ensures that 
+# a slave running on the master does not
+# share the master control directories.
+#======================================
+/var/tmp/muse/<Server FQDN>/m_system                                            ## System files like muse.map
+/var/tmp/muse/<Server FQDN>/m_system/m_muse_map                                 ## Main map is overwritten every run
+/var/tmp/muse/<Server FQDN>/m_system/muse.ctl                                   ## Echo stop to shut down main state machine
+/var/tmp/muse/<Server FQDN>/m_system/m_msg_file                                 ## Msg file for msgs from slave
+/var/tmp/muse/<Server FQDN>/run/                                                ## Top level run time directory
+/var/tmp/muse/<Server FQDN>/run/<User tag>/<system tag>/                        ## Top level for specific run files
+/var/tmp/muse/<Server FQDN>/run/<User tag>/<system tag>/m_results               ## The results files from the slaves
+/var/tmp/muse/<Server FQDN>/run/<User tag>/<system tag>/m_control               ## The control files for the run
+/var/tmp/muse/<Server FQDN>/run/<User tag>/<system tag>/m_tmp                   ## Tmp files for run
+/var/tmp/muse/<Server FQDN>/run/<User tag>/<system tag>/m_newexp                ## Expected results files generated during run
+/tmp/<Server FQDN>/muse_include_register                                        ## Track our includes
+
+#======================================
+# MUSE repo
+#======================================
+/usr/local/bin/muse -> /usr/local/bin/muse_root/system/muse                     ## The executable for the master
+/usr/local/bin/muse/bin                                                         ## System plugins for muse
+/usr/local/bin/muse/data                                                        ## 
+/usr/local/bin/muse/db                                                          ## Generic database libraries
+/usr/local/bin/muse/docs                                                        ## MUSE design docs
+/usr/local/bin/muse/lib                                                         ## Env files and constants
+/usr/local/bin/muse/projects                                                    ## Use plugin and script collections
+/usr/local/bin/muse/resources                                                   ## Resource files
+/usr/local/bin/muse/system                                                      ## Core files
+/usr/local/bin/muse/test                                                        ## Unit test files for MUSE itself
+/usr/local/bin/muse/utils                                                       ## Any useful utlility for MUSE
+
+#======================================
+# Core files
+#======================================
+muse_master.cfg                                                                 ## Primary config file for master
+constants.dat                                                                   ## Primary constants file for muse
+
+#======================================
+# User environment files
+#======================================
+${HOME}/muse_run_environment                                                    ## Environment file for user specific variables
+                                                                                ## e.g. Cluster FQDN etc

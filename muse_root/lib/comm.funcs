@@ -1,0 +1,420 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   muse.comms
+## Author       :   Bradley Atkins
+## Description  :   Comms functions for managing the
+##                  listeners.
+## Date         :   17/03/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+##############################################################
+##
+## Name         :   m_send_msg_to_master
+## Author       :   Bradley Atkins
+## Description  :   Send a message to the master server
+## Date         :   12/09/2012
+## Args         :   1 - MSG ID
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_send_msg_to_master()
+{
+    #======================================
+    # Validation and Setup
+    #======================================
+    [[ $# -eq 1 ]] || m_fail 2 "Error: Usage. Args. 1 expected. (${FUNCNAME})" 
+    [[ ${1} =~ ^[[:digit:]]$ ]] || m_fail 2 "Error: Usage. Args. [1] integer expected. (${FUNCNAME})" 
+    local MSG
+
+    #======================================
+    # Get the msg from the msg table
+    #======================================
+    m_get_msg ${1} MSG OUTBOUND
+    [[ -n ${MSG} ]] || m_fail 2 "Error: Failed to retrieve msg with id (${1}) (${FUNCNAME})" 
+
+    local SSH_OPTS="-S ${M_CNXN_PATH}_${M_RUN_ID}/${M_MSG_USR}@${M_MASTER_HOST}:22 "
+
+    echo "${MSG}" | sudo ssh  ${SSH_OPTS} ${M_MSG_USR}@${M_MASTER_HOST} "${M_MASTER_MSG_FILE}" || 
+        m_fail 2 "Error: SSH failed. (${FUNCNAME})" 
+} 
+##############################################################
+##
+## Name         :   m_send_msg_to_pipe
+## Author       :   Bradley Atkins
+## Description  :   Send a msg to a named pipe on the localhost
+##                  Mainly used to tell the listener to exit
+## Date         :   12/09/2012
+## Args         :   1 - Status
+##                  2 - Name of calling function
+##                  3 - Name of pipe
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_send_msg_to_pipe()
+{
+    [[ $# -eq 3 ]] || m_fail 2 "Error: Usage (${FUNCNAME})" 
+
+    local MSG="${TS}; $(hostname); Caller=${2}; Status=${1}" PIPE="${3}"
+
+    [[ -p "${PIPE}" ]] || m_fail 2 "Error: Pipe not found (${PIPE}) (${FUNCNAME})" 
+
+    echo "${MSG}" >> "/tmp/${PIPE}" || m_fail 2 "Error: Write to pipe (${PIPE}) failed (${FUNCNAME})" 
+}
+
+
+##############################################################
+##
+## Name         :   m_create_rx
+## Author       :   Bradley Atkins
+## Description  :   Instantiate the listeners for this run
+## Date         :   12/09/2012
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_create_rx()
+{
+    #======================================
+    # Setup and Validation
+    #======================================
+    [[ -n ${C_LISTENER_TIME_OUT} ]] || m_fail 13 "Error: Listener timeout not set (${FUNCNAME})" 
+    [[ -n ${M_SERVER_LIST} ]] || m_fail 13 "Error: server list not set (${FUNCNAME})" 
+    [[ ${C_LISTENER_TIME_OUT} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Validation error for time out C_LISTENER_TIME_OUT (${C_LISTENER_TIME_OUT}) (${FUNCNAME})" 
+    
+    local LISTENER LPID TO=${C_LISTENER_TIME_OUT} LID RESF= TMPF=
+    
+    m_find_file muse_rx LISTENER || m_fail 13 "Error: Failed to find file muse_rx (${FUNCNAME})"
+    m_check_file -rx "${LISTENER}" || m_fail 13 "Error: Listener validation (${FUNCNAME})" 
+    cp "${LISTENER}" "${M_CONTROL}/" || m_fail 13 "Error: Failed to copy listener (${FUNCNAME})" 
+    LISTENER="${M_CONTROL}/muse_rx"
+
+    m_find_file msg.env M_MSG_ENV || m_fail 13 "Error: Failed to find file msg.env (${FUNCNAME})"
+    [[ -r "${M_MSG_ENV}" ]] || m_fail 13 "Error: Env file validation failed. (${FUNCNAME})"
+    
+    m_get_tmp_file ${FUNCNAME} TMPF
+
+    #======================================
+    # Create a control record for the listener 
+    # and retrieve listener id for record
+    #======================================
+    m_add_new_listener_to_db "${LISTENER}" LID
+    
+    #======================================
+    # Launch the listener
+    #======================================
+    touch "${M_RX_CTL}"
+    ## listener | tmpfile | muse log | msg.env | control file | Host to listen for  | runtime control dir | log level
+    "${LISTENER}" "${TMPF}" "${M_LOG}" "${M_MSG_ENV}" "${M_RX_CTL}" "${M_CONTROL}" "${M_LOG_LEVEL}"  & 
+
+    #======================================
+    # Update the listener record with pid
+    #======================================
+    m_update_listener_table "pid" $! ${LID}
+
+    #======================================
+    # Wait for rx to report that it is listening
+    #======================================
+    while [[ $(head -n 1 "${M_RX_CTL}") != "${M_RX_READY}" ]]
+    do
+        TO=$(( TO - 1))
+        [[ ${TO} -eq 0 ]] && m_fail 13 "Error: Timeout waiting for listener to start. (${FUNCNAME})"
+        sleep 1
+    done
+
+    #======================================
+    # Update the record with new status
+    #======================================
+    m_update_listener_table "status" "${M_RX_READY}" "${LID}"
+}  
+
+##############################################################
+##
+## Name         :   m_create_slave_tx
+## Author       :   Bradley Atkins
+## Description  :   Create the message transmiter and confirm
+##                  it is ready to send for slave
+## Date         :   25/12/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_create_slave_tx()
+{
+    #======================================
+    # Setup and Validation
+    #======================================
+    [[ -d ${M_CONTROL} ]] || m_fail 2 "Error: Runtime control directory not set (${FUNCNAME})" 
+    [[ ${C_LISTENER_TIME_OUT} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Validation error for time out C_LISTENER_TIME_OUT (${C_LISTENER_TIME_OUT}) (${FUNCNAME})" 
+    local TX= TMPFILE1= STR="PENDING" TO=${C_LISTENER_TIME_OUT}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+    #======================================
+    # Get slave_tx
+    #======================================
+    m_find_file slave_tx TX
+    m_check_file -rx "${TX}"
+    cp "${TX}" "${M_CONTROL}/" || m_fail 2 "Error: Failed to copy tx (${FUNCNAME})" 
+    TX="${M_CONTROL}/slave_tx"
+
+    #======================================
+    # Add a new record for the tx
+    #======================================
+    m_add_new_tx_record
+    m_update_txer_table ctl_file "${M_TX_CTL}"
+    echo "run" > "${M_TX_CTL}" || m_fail 2 "Error: Failed to write to tx control file (${M_TX_CTL})  (${FUNCNAME})" 
+
+    #======================================
+    # Launch the tx and update db
+    #======================================
+    "${TX}" "${M_LOG}" "${M_TX_CTL}" "${M_MSG_ENV}" "${TMPFILE1}" "${M_CONTROL}" "${M_LOG_LEVEL}" "${M_CNXN_DIR}" "${M_MASTER_MSG_DIR}" &
+    m_update_txer_table pid $!
+
+    #======================================
+    # Loop while waiting for ready status
+    #======================================
+    while [[ $(head -n 1 "${M_TX_CTL}") != "${M_TX_READY}" ]]
+    do
+        sleep .5
+        TO=$((TO -1))
+        [[ ${TO} -gt 0 ]] || m_fail 2 "Error: Wait for TX. Failed to recover status \"${M_TX_READY}\" (${FUNCNAME})" 
+    done
+
+    m_update_txer_table "status" "${M_TX_READY}"
+}
+##############################################################
+##
+## Name         :   m_create_master_tx
+## Author       :   Bradley Atkins
+## Description  :   Create the message transmiter and confirm
+##                  it is ready to send for master
+## Date         :   05/04/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_create_master_tx()
+{
+    #======================================
+    # Setup and Validation
+    #======================================
+    [[ -d ${M_CONTROL} ]] || m_fail 2 "Error: Runtime control directory not set (${FUNCNAME})" 
+    [[ ${C_LISTENER_TIME_OUT} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Validation error for time out C_LISTENER_TIME_OUT (${C_LISTENER_TIME_OUT}) (${FUNCNAME})" 
+    local TX= TMPFILE1= STR="PENDING" TO=${C_LISTENER_TIME_OUT}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+    #======================================
+    # Get master_tx
+    #======================================
+    m_find_file master_tx TX
+    m_check_file -rx "${TX}"
+    cp "${TX}" "${M_CONTROL}/" || m_fail 2 "Error: Failed to copy tx (${FUNCNAME})" 
+    TX="${M_CONTROL}/master_tx"
+
+    #======================================
+    # Add a new record for the tx
+    #======================================
+    m_add_new_tx_record
+    m_update_txer_table ctl_file "${M_TX_CTL}"
+    echo "run" > "${M_TX_CTL}" || m_fail 2 "Error: Failed to write to tx control file (${M_TX_CTL})  (${FUNCNAME})" 
+
+    #======================================
+    # Launch the tx and update db
+    #======================================
+    "${TX}" "${M_LOG}" "${M_TX_CTL}" "${M_MSG_ENV}" "${TMPFILE1}" "${M_CONTROL}" "${M_LOG_LEVEL}" "${M_CNXN_DIR}" &
+    m_update_txer_table pid $$
+
+    #======================================
+    # Loop while waiting for ready status
+    #======================================
+    while [[ $(head -n 1 "${M_TX_CTL}") != "${M_TX_READY}" ]]
+    do
+        sleep .5
+        TO=$((TO -1))
+        [[ ${TO} -gt 0 ]] || m_fail 2 "Error: Wait for TX. Failed to recover status \"${M_TX_READY}\" (${FUNCNAME})" 
+    done
+
+    m_update_txer_table "status" "${M_TX_READY}"
+}
+##############################################################
+##
+## Name         :   m_write_outbound_msg
+## Author       :   Bradley Atkins
+## Description  :   Write the message file for tx to send
+##                  Name format for message file is -
+##                  recipient_MESSAGEID
+##
+##                  Message is pipe delimited
+##
+##                  Message is written to out_buffer and then moved 
+##                  to out_pending
+## Date         :   03/01/2014
+## Args         :   1 - msg_id (msgs_id from sender msg table)
+##					2 - tx_time (Time stamp from inbound message)
+##                  3 - thread_id (MSG thread this msg belongs to)
+##                  4 - priority (1 - High, 2 - Medium, 3 - Low)
+##                  5 - sender (hostname of sender)
+##                  6 - recipient (hostname)
+##                  7 - action_flag (Corresponds to Action for SM)
+##                  8 - payload (Any metadata required by the action)
+##                  9 - direction (INBOUND or OUTBOUND)
+##                  10- status (NEW, PROCESSED, TIMEOUT)
+##                  11- session_id (Global session ID set by master)
+##					12- Var to return ID in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_write_outbound_msg()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+    [[ $# -eq 11 ]] || m_fail 2 "Error: Args count. 12 Expected (${FUNCNAME})"
+	
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Usage args [1]. Integer expected. (${FUNCNAME})"
+	[[ -n ${2} ]] || m_fail 2 "Error: Usage args [2] Time stamp expected. (${FUNCNAME})"
+	[[ ${3} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Usage args [3] integer expected. (${FUNCNAME})"
+	[[ (${4} -eq 1) || (${4} -eq 2) || (${4} -eq 3) ]] || m_fail 2 "Error: Usage args [4] Priority out of range (${1}). 1 - 3 expected.(${FUNCNAME})"
+	[[ -n ${5} ]] || m_fail 2 "Error: Usage args [5] Sender expected. (${FUNCNAME})"
+	[[ -n ${6} ]] || m_fail 2 "Error: Usage args [6] Recipient expected. (${FUNCNAME})"
+	[[ ${7} =~ ^[A-Z0-9_]+$ ]] || m_fail 2 "Error:  Usage args. [7] Action Expected. (${FUNCNAME})"
+	[[ -n ${8} ]] || m_fail 2 "Error: Usage args [8] payload expected. (${FUNCNAME})"
+	[[ (${9} == "INBOUND") || (${9} == "OUTBOUND") ]] || m_fail 2 "Error:  Usage args. [9] Direction expected. (${FUNCNAME})"
+	[[ (${10} == "NEW") || (${10} == "PROCESSED") || (${10} == "TIMEOUT") ]] || m_fail 2 "Error:  Usage args. [10] Status expected. (${FUNCNAME})"
+	[[ -n ${11} ]] || m_fail 2 "Error: Usage args. [11] Session ID expected (${FUNCNAME})" 
+
+    #======================================
+    # Construct the message body
+    #======================================
+    local MSG_FILE="${M_MSG_OUT_BUFFER}/${6}_${1}.msg"
+    local MSG_BODY="0|${1}|${2}|${3}|${4}|${5}|${6}|${7}|${8}|${9}|${10}|${11}"
+
+    #======================================
+    # Write to M_MSG_OUT_BUFFER and then
+    # Move to M_MSG_OUT_PENDING
+    #======================================
+    echo "${MSG_BODY}" > "${MSG_FILE}" || 
+        m_fail 2 "Error: Write failed for msg to (${MSG_FILE}). (${FUNCNAME})"
+    mv "${MSG_FILE}" "${M_MSG_OUT_PENDING}" || 
+        m_fail 2 "Error: Move failed for (${MSG_FILE}) to (${M_MSG_OUT_PENDING}). (${FUNCNAME})" 
+}
+
+##############################################################
+##
+## Name         :   m_check_msgs_in_pending
+## Author       :   Bradley Atkins
+## Description  :   Check M_MSG_IN_PENDING for new msg files
+##                  If found update DB and set action flag
+## Date         :   06/04/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_check_msgs_in_pending()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+    [[ -n ${M_MSG_IN_PENDING} ]] || m_fail 2 "Error: Message in_pending dir not set. (${FUNCNAME})" 
+    local TN= LID= SMP= MSG= OLD_IFS=${IFS} NULL= SND_ID= TXT= TH_ID= PRIORITY= SENDER= RECIP= ACTION= PAYLOAD= DIRECTION= STATUS= SESSION_ID= 
+
+    #======================================
+    # Scan in_pending for complete msg files
+    #======================================
+    if ls "${M_MSG_IN_PENDING}/"*.msg.${M_MSG_OK} >/dev/null 2>&1
+    then
+        SMP=$(head -n 1 < <(ls "${M_MSG_IN_PENDING}/"*.msg.${M_MSG_OK}))
+        MSG=$(echo ${SMP} | awk '{print $NF}' FS="/")
+        MSG=${MSG%.*}
+        [[ -r "${M_MSG_IN_PENDING}/${MSG}" ]] || m_fail 2 "Semaphore (${SMP}) without file found. MSG service inconsistent. Exiting" "ERROR"
+
+        #======================================
+        # Insert the new msg into the msgs table
+        #======================================
+        IFS="|"
+        read NULL SND_ID TXT TH_ID PRIORITY SENDER RECIP ACTION PAYLOAD DIRECTION STATUS SESSION_ID < <(head -n 1 "${M_MSG_IN_PENDING}/${MSG}")
+        DIRECTION="INBOUND"
+        IFS=${OLD_IFS}
+        m_set_msg "${SND_ID}" "${TXT}" "${TH_ID}" "${PRIORITY}" "${SENDER}" "${RECIP}" "${ACTION}" "${PAYLOAD}" "${DIRECTION}" "${STATUS}" "${SESSION_ID}" LID
+
+        #======================================
+        # Update the received time in record
+        #======================================
+        m_get_epoch_milliseconds TN
+        m_update_msgs_table rx_time ${TN} "msgs_id" ${LID}
+
+        #======================================
+        # Complete transmission found so move it
+        #======================================
+        mv "${M_MSG_IN_PENDING}/${MSG}" "${M_MSG_IN_PROCESSED}"
+        mv "${SMP}" "${M_MSG_IN_PROCESSED}"
+
+        return 0
+    fi
+
+    return 1
+}
+
+##############################################################
+##
+## Name         :   m_check_dump_in_pending
+## Author       :   Bradley Atkins
+## Description  :   Check M_MSG_IN_PENDING for new sql dump
+## Date         :   16/12/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_check_dump_in_pending()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+    [[ -n ${M_MSG_IN_PENDING} ]] || m_fail 2 "Error: Message in_pending dir not set. (${FUNCNAME})" 
+    local FILE=
+
+    #======================================
+    # Scan in_pending for complete sql dump
+    #======================================
+    if ls "${M_MSG_IN_PENDING}/"*.sql.${M_MSG_OK} >/dev/null 2>&1
+    then
+        
+        FILE=$(head -n 1 <(ls "${M_MSG_IN_PENDING}/"*.sql))
+        if ! [[ -r "${FILE}" ]] 
+        then
+            m_fail 2 "Error: Readable sql file expected (${FILE}) (${FUNCNAME})" 
+        fi
+        
+        #======================================
+        # Is this a dump of the var_map and scope?
+        #======================================
+        if [[ (-n $(grep "CREATE TABLE var_map" "${FILE}")) && (-n $(grep "CREATE TABLE var_scope" "${FILE}")) && ($(grep -c "CREATE TABLE" "${FILE}") -eq 2) ]]
+        then
+            m_import_tables "${FILE}"
+        else
+            m_fail 2 "Error: File validation failed (${FILE}) (${FUNCNAME})" 
+        fi
+
+        #======================================
+        # Move the file to completed
+        #======================================
+        mv "${FILE}" "${M_MSG_IN_PROCESSED}" || m_fail 2 "Error: Move failed (${FILE}) (${FUNCNAME})" 
+        mv "${FILE}.${M_MSG_OK}" "${M_MSG_IN_PROCESSED}" || m_fail 2 "Error: Move failed (${FILE}.${M_MSG_OK}) (${FUNCNAME})" 
+
+        return 0
+    fi
+
+    return 1
+} 

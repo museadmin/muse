@@ -1,0 +1,237 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   slave_cnxn_mgr
+## Author       :   Bradley Atkins
+## Description  :   Manage the ssh connection for muse
+##
+##                  Commands are -
+##                  start
+##                  stop
+##
+## Date         :   29/06/2013
+## Args         :   1 - CTL File
+##                  2 - Control Directory
+##                  3 - User
+##                  4 - SSH Config file
+##                  5 - LOG File
+##                  6 - M_RUN_ID from muse
+##                  7 -> List of servers to connect to
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+##############################################################
+
+function cleanup()
+{
+    for SERVER in ${SERVER_LIST}
+    do
+        if check_cnxn ${USR} ${SERVER} "${CTL_DIR}"
+        then
+            close_cnxn ${USR} ${SERVER} "${CTL_DIR}" || log_msg "Failed to stop (${SERVER})"
+        fi
+    done
+
+    if [[ -n ${CTL_FILE} ]]
+    then
+        if [[ "${CTL_FILE}" != *.failed ]]
+        then
+            [[ -d "${CTL_DIR}" ]] && rm -rf "${CTL_DIR}"
+        fi
+    fi
+}
+ 
+trap cleanup SIGINT SIGTERM EXIT SIGHUP
+
+error_exit()
+{
+    log_msg "${1}"
+    mv "${CTL_FILE}" "${CTL_FILE}.failed" || log_msg "Failed to move (${CTL_FILE}) to (${CTL_FILE}.failed)"
+    CTL_FILE="${CTL_FILE}.failed"
+    exit 1
+} 
+
+log_msg()
+{
+    echo "$(date): ${1}" >> "${LOG}"
+}
+
+open_cnxn()
+{
+    #======================================
+    # Open a connection. Assumes already 
+    # confirmed not open with check_cnxn
+    #======================================
+    [[ $# -eq 4 ]] || error_exit "Usage: args.  4 expected. open_cnxn()"
+
+    ## Can we resolve it?
+    [[ -n $(egrep "Address: "[0-9]+.[0-9]+.[0-9]+.[0-9]+ < <(tail -n 1 < <(nslookup ${2} | awk NF))) ]] || error_exit "DNS: Failed to resolve (${2})"
+
+    if ! [[ -S "${3}/"${1}@${2}:22 ]]
+    then
+        ssh  ${SSH_OPTS} -F "${4}" -MN -f -S "${3}/"${1}@${2}:22 ${1}@${2} || return 1
+    fi
+
+    return 0
+} 
+
+close_cnxn()
+{
+    #======================================
+    # Stop a connection. Assumes already 
+    # run check_cnxn
+    #======================================
+    [[ $# -eq 3 ]] || error_exit "Usage: arg cnt. close_cnxn()"
+
+    ssh -O exit -S "${3}/"${1}@${2}:22 ${1}@${2} >/dev/null 2>&1 || return 1
+
+    return 0
+}
+
+check_cnxn()
+{
+    #======================================
+    # check a connection
+    #======================================
+    [[ $# -eq 3 ]] || error_exit "Usage: arg cnt. check_cnxn()"
+
+    ssh -O check -S "${3}/"${1}@${2}:22 ${1}@${2} >/dev/null 2>&1 || return 1
+
+    return 0
+}
+
+read_ctl_file()
+{
+    #======================================
+    # Read in the cmd from the ctl file
+    #======================================
+    CMD=$(tail -n 1 "${CTL_FILE}" 2>/dev/null)
+    [[ -n ${CMD} ]] || error_exit "Control: No cmd in (${CTL_FILE})"
+
+}
+
+dump_env()
+{
+    echo "CTL_DIR = ${CTL_DIR}"
+    echo "USR = ${USR}"
+    echo "cfg file = ${CFG_FILE}"
+    echo "Run ID = ${RUN_ID}"
+    echo "ID file = ${IDENTITY_FILE}"
+    echo "Server list = ${SERVER_LIST}"
+    echo "SSH OPTS = ${SSH_OPTS}"
+} >> "${LOG}" 2>&1
+
+#======================================
+# Start Validation / Setup
+#======================================
+LOG="/tmp/slave_cnxn_mgr.log"
+[[ $# -ge 6 ]] || error_exit "Usage: arg cont >= 6 expected"
+
+CTL_DIR="${1}"
+shift
+USR="$1"
+shift
+CFG_FILE="${1}"
+shift
+RUN_ID=${1}
+shift
+IDENTITY_FILE=${1}
+shift
+SERVER_LIST="$@"
+
+[[ ${CTL_DIR} =~ slave ]] && LOG="/tmp/slave_cnxn_mgr.log"
+CMD=
+
+CTL_DIR="${CTL_DIR}_${RUN_ID}"
+CTL_FILE="${CTL_DIR}/slave_cnxn_mgr.ctl"
+
+[[ -d "${CTL_DIR}" ]] || mkdir -p "${CTL_DIR}"
+[[ -d "${CTL_DIR}" ]] || error_exit "Failed to create / find Control directory (${CTL_DIR})"
+chmod 700 "${CTL_DIR}" || error_exit "Permissions: chmod failed" 
+
+:>"${CTL_DIR}/slave_cnxn_mgr.log" || error_exit "File IO: Log file (${LOG}) not writable"
+LOG="${CTL_DIR}/slave_cnxn_mgr.log"
+
+[[ -n ${USR} ]] || error_exit "Usage: args [2] - User expected"
+[[ -n ${SERVER_LIST} ]] || error_exit "Usage: args 6-"
+[[ -r "${CFG_FILE}" ]] || error_exit "Usage args: [3] - ssh config file (${CFG_FILE}) not readable / found"
+[[ ${RUN_ID} =~ ^[0-9]+$ ]] || error_exit "Usage args: [4] - integer expected"
+[[ -f ${IDENTITY_FILE} ]] || error_exit "Usage arg:s [5] - ssh Identity file expected"
+
+SSH_OPTS=" -o IdentityFile=${IDENTITY_FILE} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ForwardAgent=yes -o ServerAliveInterval=5 "
+
+#dump_env
+
+SLEEP=2
+
+for SERVER in ${SERVER_LIST}
+do
+    nslookup ${SERVER} >/dev/null 2>&1 || error_exit "Failed to validate server (${SERVER})"
+done
+
+#======================================
+# Read our ctl file
+#======================================
+echo start > "${CTL_FILE}"
+read_ctl_file
+
+#======================================
+# Action
+#======================================
+while : 
+do
+    #======================================
+    # Parse the cmd
+    #======================================
+    case ${CMD} in
+        "start")
+            #======================================
+            # Create connection 
+            #======================================
+            for SERVER in ${SERVER_LIST}
+            do
+                if ! check_cnxn ${USR} ${SERVER} "${CTL_DIR}"
+                then
+                    if ! open_cnxn ${USR} ${SERVER} "${CTL_DIR}" "${CFG_FILE}"
+                    then
+                        error_exit "Start failed. (${USR} ${SERVER} ${CTL_DIR})"
+                    else
+                        # Signal we're running to muse
+                        echo "running" > "${CTL_FILE}" || error_exit "Failed to write \"running\" to ctl file (${CTL_FILE})"
+                   fi
+               fi
+            done
+        ;;
+        "stop")
+            #======================================
+            # Close connection and exit
+            #======================================
+            for SERVER in ${SERVER_LIST}
+            do
+                close_cnxn ${USR} ${SERVER} "${CTL_DIR}" || log_msg "Failed to stop (${SERVER})"
+            done
+            exit
+        ;;
+        "running");;
+        *) error_exit "Control: Unrecognised cmd (${CMD}) in ctl file (${CTL_FILE})";;
+    esac
+
+    #======================================
+    # Check all connections and restart any 
+    # failing ones. Frequency is defined by 
+    # sleep below.
+    #======================================
+    for SERVER in ${SERVER_LIST}
+    do
+        if ! check_cnxn ${USR} ${SERVER} "${CTL_DIR}"
+        then
+            open_cnxn ${USR} ${SERVER} "${CTL_DIR}" "${CFG_FILE}" || log_msg "Auto restart Failed: ${USR} ${SERVER} ${CTL_DIR}"
+        fi
+    done
+
+    read_ctl_file
+
+    sleep ${SLEEP}
+done
+

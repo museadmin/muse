@@ -1,0 +1,24 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   m_hello_from_world_of_python
+## Author       :   Bradley Atkins
+## Description  :   Demo to show MUSE running python
+## Date         :   26/07/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## M_JOB_HOST PRX
+## M_GREP_PATTERN "^[[:alnum:]]+: |^/.*: |error|info|warning"
+##
+##############################################################
+SCRIPT_NAME=m_hello_from_world_of_python
+
+m_find_file hello.py HELLO || m_fail 1 "Error: Call to m_find_file failed. (${FUNCNAME})" 
+
+python "${HELLO}" || m_fail 1 "Error: Call to hello.py failed (${SCRIPT_NAME})" 
+
+m_prove_lib_is_sourced || m_fail 2 "Error: Call to m_prove_lib_is_sourced failed. (${SCRIPT_NAME})" 
+

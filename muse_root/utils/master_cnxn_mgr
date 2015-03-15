@@ -1,0 +1,257 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   master_cnxn_mgr
+## Author       :   Bradley Atkins
+## Description  :   Manage the ssh connections for muse. By default
+##                  the manager expects a list of servers to open
+##                  ssh master connections for. It then polls the 
+##                  connections at $2 seconds looking for failures.
+##                  Any failed connections are restarted if possible.
+##                  cxn_mgr is controlled by muse using a control file.
+##
+##                  Commands are -
+##                  start
+##                  stop
+##
+## Date         :   29/06/2013
+## Args         :   1 - CTL File
+##                  2 - Control Directory
+##                  3 - User
+##                  4 - SSH Config file
+##                  5 - LOG File
+##                  6 - M_RUN_ID from muse
+##                  7 -> List of servers to connect to
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+##############################################################
+
+function cleanup()
+{
+    for SERVER in ${SERVER_LIST}
+    do
+        if check_cnxn ${USR} ${SERVER} "${CTL_DIR}"
+        then
+            close_cnxn ${USR} ${SERVER} "${CTL_DIR}" || log_msg "Failed to stop (${SERVER})" "ERROR"
+        fi
+    done
+
+    if [[ -n ${CTL_FILE} ]]
+    then
+        if [[ "${CTL_FILE}" != *.failed ]]
+        then
+            [[ -d "${CTL_DIR}" ]] && rm -rf "${CTL_DIR}"
+        fi
+    fi
+}
+ 
+trap cleanup SIGINT SIGTERM EXIT SIGHUP
+
+error_exit()
+{
+    log_msg "${1}" "ERROR"
+    mv "${CTL_FILE}" "${CTL_FILE}.failed" || log_msg "Failed to move (${CTL_FILE}) to (${CTL_FILE}.failed)" "ERROR"
+    CTL_FILE="${CTL_FILE}.failed"
+    exit 1
+} 
+
+log_msg()
+{
+    echo "$(date): ${2}: ${1}" >> "${MUSE_LOG}"
+}
+
+open_cnxn()
+{
+    #======================================
+    # Open a connection. Assumes already 
+    # confirmed not open with check_cnxn
+    #======================================
+    [[ $# -eq 4 ]] || error_exit "Usage: args.  4 expected. open_cnxn()"
+
+    if ! [[ -S "${3}/"${1}@${2}:22 ]]
+    then
+        ssh  ${SSH_OPTS} -F "${4}" -MN -f -S "${3}/"${1}@${2}:22 ${1}@${2} || return 1
+
+        #======================================
+        # Write connection details to slave register
+        #======================================
+        if ! grep "${2}|${3}/${1}@${2}:22" "${REGISTER}" >/dev/null 2>&1
+        then
+            echo "${2}|${3}/${1}@${2}:22" >> "${REGISTER}"
+        fi
+    fi
+
+    return 0
+} 
+
+close_cnxn()
+{
+    #======================================
+    # Stop a connection. Assumes already 
+    # run check_cnxn
+    #======================================
+    [[ $# -eq 3 ]] || error_exit "Usage: arg cnt. close_cnxn()"
+
+    ssh -O exit -S "${3}/"${1}@${2}:22 ${1}@${2} >/dev/null 2>&1 || return 1
+
+    return 0
+}
+
+check_cnxn()
+{
+    #======================================
+    # check a connection
+    #======================================
+    [[ $# -eq 3 ]] || error_exit "Usage: arg cnt. check_cnxn()"
+
+    ssh -O check -S "${3}/"${1}@${2}:22 ${1}@${2} >/dev/null 2>&1 || return 1
+
+    return 0
+}
+
+read_ctl_file()
+{
+    #======================================
+    # Read in the cmd from the ctl file
+    #======================================
+    CMD=$(tail -n 1 "${CTL_FILE}" 2>/dev/null)
+    [[ -n ${CMD} ]] || error_exit "Control: No cmd in (${CTL_FILE})"
+
+}
+
+dump_env()
+{
+    echo "CTL_DIR = ${CTL_DIR}"
+    echo "USR = ${USR}"
+    echo "cfg file = ${CFG_FILE}"
+    echo "Run ID = ${RUN_ID}"
+    echo "ID file = ${IDENTITY_FILE}"
+    echo "Control = ${CONTROL}"
+    echo "Server list = ${SERVER_LIST}"
+    echo "SSH OPTS = ${SSH_OPTS}"
+    echo "REGISTER = ${REGISTER}"
+} >> "${MUSE_LOG}" 
+
+#======================================
+# Start Validation / Setup
+#======================================
+[[ $# -ge 8 ]] || error_exit "Usage: arg cont >= 8 expected"
+
+#======================================
+# Shift through args. Anything left is 
+# server list
+#======================================
+CTL_DIR="${1}"          ## in .ssh
+shift
+USR="$1"                ## msg user
+shift
+CFG_FILE="${1}"         ## SSH config
+shift
+RUN_ID=${1}             ## Unique run id from master
+shift
+IDENTITY_FILE=${1}      ## Key for messaging user
+shift
+MUSE_LOG=${1}           ## MUSE log
+shift
+CONTROL="${1}"          ## The master muse ctl dir
+shift
+REGISTER="${1}"         ## Record the slave cnxn details
+shift
+SERVER_LIST="$@"        ## Servers we want to connect to
+
+SSH_OPTS=" -o IdentityFile=${IDENTITY_FILE} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ForwardAgent=yes -o ServerAliveInterval=5 "
+SLEEP=2
+CMD=
+CTL_DIR="${CTL_DIR}_${RUN_ID}"
+CTL_FILE="${CTL_DIR}/master_cnxn_mgr.ctl"
+CNXN_STATUS="${CTL_DIR}/master_cnxn_mgr.status"
+
+[[ -d "${CTL_DIR}" ]] || mkdir -p "${CTL_DIR}"
+[[ -d "${CTL_DIR}" ]] || error_exit "Failed to create / find Control directory (${CTL_DIR})"
+chmod 700 "${CTL_DIR}" || error_exit "Permissions: chmod failed" 
+
+[[ -n ${USR} ]] || error_exit "Usage: args [2] - User expected"
+[[ -n ${SERVER_LIST} ]] || error_exit "Usage: args 6-"
+[[ -r "${CFG_FILE}" ]] || error_exit "Usage args: [3] - ssh config file (${CFG_FILE}) not readable / found"
+[[ ${RUN_ID} =~ ^[0-9]+$ ]] || error_exit "Usage args: [4] - integer expected"
+[[ -f ${IDENTITY_FILE} ]] || error_exit "Usage arg:s [5] - ssh Identity file expected"
+
+#dump_env
+#======================================
+# Validate the server list
+#======================================
+for SERVER in ${SERVER_LIST}
+do
+    nslookup ${SERVER} >/dev/null 2>&1 || error_exit "Failed to validate server (${SERVER})"
+done
+
+echo start > "${CTL_FILE}"
+
+#======================================
+# Read our ctl file
+#======================================
+read_ctl_file
+
+#======================================
+# Action
+#======================================
+while : 
+do
+    #======================================
+    # Parse the cmd
+    #======================================
+    case ${CMD} in
+        "start")
+            #======================================
+            # Create a master connection for each server
+            # if not already active.
+            #======================================
+            for SERVER in ${SERVER_LIST}
+            do
+                if ! check_cnxn ${USR} ${SERVER} "${CTL_DIR}"
+                then
+                    if ! open_cnxn ${USR} ${SERVER} "${CTL_DIR}" "${CFG_FILE}"
+                    then
+                        echo "${SERVER} CLOSED" >> "${CNXN_STATUS}" || error_exit "Failed to write to status file"
+                    else
+                        echo "${SERVER} OPEN" >> "${CNXN_STATUS}" || error_exit "Failed to write to status file"
+                   fi
+               fi
+            done
+            # Signal we're running to muse
+            echo "running" > "${CTL_FILE}" || error_exit "Failed to write \"running\" to ctl file (${CTL_FILE})"
+        ;;
+        "stop")
+            #======================================
+            # Close all master connections and exit
+            #======================================
+            for SERVER in ${SERVER_LIST}
+            do
+                close_cnxn ${USR} ${SERVER} "${CTL_DIR}" || log_msg "Failed to stop (${SERVER})" "ERROR"
+            done
+            exit
+        ;;
+        "running");;
+        *) error_exit "Control: Unrecognised cmd (${CMD}) in ctl file (${CTL_FILE})";;
+    esac
+
+    #======================================
+    # Check all connections and restart any 
+    # failing ones. Frequency is defined by 
+    # sleep below.
+    #======================================
+    for SERVER in ${SERVER_LIST}
+    do
+        if ! check_cnxn ${USR} ${SERVER} "${CTL_DIR}"
+        then
+            open_cnxn ${USR} ${SERVER} "${CTL_DIR}" "${CFG_FILE}" 
+        fi
+    done
+
+    read_ctl_file
+
+    sleep ${SLEEP}
+done
+

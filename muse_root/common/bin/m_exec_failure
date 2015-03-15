@@ -1,0 +1,15 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   m_exec_failure
+## Author       :   Bradley Atkins
+## Description  :   Handle a fatal failure.
+## Date         :   09/09/2012
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+##############################################################
+
+exit 1

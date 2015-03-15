@@ -1,0 +1,32 @@
+##############################################################
+##
+## Name         :   evaluation.funcs
+## Author       :   Bradley Atkins
+## Description  :   Common function library for the evaluation
+##                  project
+## Date         :   11/07/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+##############################################################
+##
+## Name         :   m_prove_lib_is_sourced
+## Author       :   Bradley Atkins
+## Description  :   Echo a project wide environment variable to
+##                  prove that this file and the environment file
+##                  are sourced at runtime.
+## Date         :   11/07/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_prove_lib_is_sourced()
+{
+    [[ -n ${M_EVALUATION_SAMPLE_VAR} ]] || m_fail 2 "Error: Environment variable (M_EVALUATION_SAMPLE_VAR) not set. (${FUNCNAME})" 
+
+    echo "Value of M_EVALUATION_SAMPLE_VAR is (${M_EVALUATION_SAMPLE_VAR})"
+}

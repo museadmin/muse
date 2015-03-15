@@ -1,0 +1,1200 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   muse
+## Date         :   20/07/2012
+## Description  :   Managed Unix Script Execution
+##                  A command line automation harness
+##
+##              :   MUSE is released by Bradley Atkins 
+##              :   Copyright (C) 2012 info@bradleyatkins.com
+##
+## This program is free software; you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, version 2 only.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program; if not, write to the Free Software
+## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
+## USA
+##
+##############################################################
+
+##############################################################
+##
+## Name         :   cleanup
+## Author       :   Bradley Atkins
+## Description  :   Perform a clean exit in all states
+## Date         :   14/08/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+cleanup()
+{
+    local CTL_FILE
+
+    if [[ ${M_ACTION} != NORUN ]]
+    then
+
+        #======================================
+        # Tell the cnxn mgr to close all cnxns
+        #======================================
+        if [[ -f "${M_CNXN_CTL_FILE}" ]] 
+        then
+            echo stop > /tmp/cnxn_ctl
+            mv /tmp/cnxn_ctl "${M_CNXN_CTL_FILE}"
+        fi
+        #======================================
+        # Close all rx and tx
+        #======================================
+        if [[ -d "${M_CONTROL}" ]]
+        then
+            echo "EXIT" > "${M_CONTROL}/rx.ctl" 2>/dev/null
+            echo "EXIT" > "${M_CONTROL}/tx.ctl" 2>/dev/null
+        fi
+    fi
+
+    #======================================
+    # Explicitely close any open descriptors
+    # in case we are being called via ssh
+    #======================================
+    for fd in $(ls /proc/$$/fd); do
+        case "$fd" in
+            0|1|2|255)
+            ;;
+            *)
+                eval "exec $fd>&-"
+            ;;
+        esac
+    done
+
+    ## TODO Remove this after local dev. For now kills slave on error in master
+    echo stop > /var/tmp/muse/m_system/muse.ctL
+}
+
+trap cleanup SIGINT SIGTERM SIGHUP EXIT
+
+##############################################################
+##
+## Name         :   usage
+## Author       :   Bradley Atkins
+## Description  :   Display the usage
+## Date         :   20/10/2012
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+usage()
+{
+    printf "\n"
+    printf "\t%s\n" "usage: ${0##*/} [-option] file file ..."
+    printf "\n"
+    printf "\t%s\n" "${0##*/} -a|--archive <tag>        :Archive tagged results"
+    printf "\t%s\n" "${0##*/} -c|--clear   <tag>        :Clear all or tagged results"
+    printf "\t%s\n" "${0##*/} -cat <name>               :Cat named muse file"
+    printf "\t%s\n" "${0##*/} -cf|--copyf <name>        :Copy file to dev directory"
+    printf "\t%s\n" "${0##*/} -cp|--copyright           :Show copyright notice"
+    printf "\t%s\n" "${0##*/} -d|--delete               :Delete the current user tag. (Resets to \"default\")"
+    printf "\t%s\n" "${0##*/} -e|--explain <job>        :Display control data for the plugin or suite file" 
+    printf "\t%s\n" "${0##*/} -fc|--findc [tag]         :Find [tagged] control files"
+    printf "\t%s\n" "${0##*/} -fe|--finde [tag]         :Find [tagged] expected files"
+    printf "\t%s\n" "${0##*/} -ff|--findf <name>        :Find muse file <name>. %<part name> for wildcard search."
+    printf "\t%s\n" "${0##*/} -fr|--findr [tag]         :Find [tagged] results"
+    printf "\t%s\n" "${0##*/} -flr|--findlr [tag]       :Find last [tagged] results"
+    printf "\t%s\n" "${0##*/} -ft|--findt [tag]         :Find [tagged] tmp files"
+    printf "\t%s\n" "${0##*/} -gb|--get-baseline [tag]  :Get [tagged] baseline of expected results files"
+    printf "\t%s\n" "${0##*/} -h|--help"
+    printf "\t%s\n" "${0##*/} -lf                       :List all muse common functions"
+    printf "\t%s\n" "${0##*/} -lf [%pattern]            :List all muse common functions 'like' pattern"
+    printf "\t%s\n" "${0##*/} -lp [%pattern]            :List all muse plugins 'like' pattern"
+    printf "\t%s\n" "${0##*/} -lr [%pattern]            :List all results directories 'like' pattern"
+    printf "\t%s\n" "${0##*/} -ls [%pattern]            :List all muse suites 'like' pattern"
+    printf "\t%s\n" "${0##*/} -lstr <string>            :List all occourences of string"
+    printf "\t%s\n" "${0##*/} -mdb|--mdatabase          :Login to the master database for the last run"
+    printf "\t%s\n" "${0##*/} -s|--show                 :Show current results tag"
+    printf "\t%s\n" "${0##*/} -sdb|--sdatabase          :Login to the slave database for the last run"
+    printf "\t%s\n" "${0##*/} -t|--tag  [name]          :Set current results tag to name"
+    printf "\t%s\n" "${0##*/} -vp <name>                :View plugin 'name'"
+    printf "\t%s\n" "${0##*/} -vip <name>               :Edit plugin 'name'in vi"
+    printf "\t%s\n" "${0##*/} -vs <name>                :View suite 'name'"
+    printf "\t%s\n" "${0##*/} -vis <name>               :Edit suite 'name' in vi"
+    printf "\n"
+}
+##############################################################
+##
+## Name         :   die_local
+## Author       :   Bradley Atkins
+## Description  :   Fail before we manage to bootstrap muse
+## Date         :   20/10/2012
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+die_local()
+{
+    echo "$(date): Error $1" >> "${M_LOG}"
+    exit 1
+}
+##############################################################
+##
+## Name         :   log_local
+## Author       :   Bradley Atkins
+## Description  :   Local logging function is used until m_log_msg
+##                  is included with common.funcs
+## Date         :   24/12/2013
+## Args         :   1 - MSG Type (INFO WARNING etc.)
+##                  2 - MSG body
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+log_local()
+{
+    echo "$(date): ${2}: MASTER - ${1}" >> "${M_LOG}"
+} 
+
+#======================================
+# Handle our sourcing
+#======================================
+##############################################################
+##
+## Name         :   include
+## Author       :   Bradley Atkins
+## Description  :   On first pass calls muse mapper. Then uses 
+##                  MUSE map file to find include libraries.
+##                  Libraries are sourced if not already sourced.
+##                  Otherwise exit. M_ var is created from lib name.
+## Date         :   24/12/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+include()
+{
+    local F=
+    
+    if [[ -z "${M_MAPPER}" ]]
+    then
+        #======================================
+        # Map all of our files
+        #======================================
+        export M_MAPPER="${M_ROOT}/utils/muse_mapper.funcs"
+        source "${M_MAPPER}" || die_local "Failed to source muse_mapper"
+        m_map_muse || die_local "Call to m_map_muse failed ($?)"
+        :> "${M_INCLUDE_REGISTER}"
+
+    fi
+
+    #======================================
+    # Find the resource and source it
+    #======================================
+    find_file ${1} F || die_local "Failed to find include file (${1})"
+    if ! grep "${F}" "${M_INCLUDE_REGISTER}"
+    then
+        source "${F}" || die_local "Failed to source include file (${1})"
+        local BASE="M_$(echo ${1%.*}_${1#*.} | tr '[:lower:]' '[:upper:]')"
+        export eval $BASE=${F}
+        echo "${F}" >> "${M_INCLUDE_REGISTER}"
+    else
+        die_local "Library already included (${1})"
+    fi
+    log_local "Include library ${1} - success" "INFO"
+}
+
+#======================================
+# set runtime default perms
+#======================================
+umask u=rwx,g=rwx,o=rwx
+
+#======================================
+# Startup sequence
+#======================================
+M_ACTION="NORUN"
+M_XID="MXID${RANDOM}"
+
+if [[ -d /var/log/muse ]] 
+then
+    M_LOG=/var/log/muse/master.log
+    log_local "${M_XID}" "INFO"
+    log_local "===========================================================================================" "INFO"
+    log_local "                Starting master boot sequence $(hostname) " "INFO"
+    log_local "===========================================================================================" "INFO"
+else
+    M_LOG=/tmp/muse_boot.log
+    die_local "Logging directory not found. Corrupt install?"
+fi
+
+[[ $# -eq 0 ]] && usage && exit 1
+cd /tmp || die_local "cd to /tmp failed"
+
+#======================================
+# Map our muse directories and files
+#======================================
+set -a
+    MUSEDEV="musedev"
+    MUSEADMIN="museadmin"
+    if egrep "${MUSEDEV}|${MUSEADMIN}" < <(groups ${USER} 2>/dev/null) >/dev/null
+    then
+        M_DEV_ROOT=~/.muse_dev
+    else
+        M_DEV_ROOT=
+    fi
+
+    M_ROOT="$(x=$(echo $(ls -l $(which muse) | cut -d">" -f2));echo ${x%/master/system/master})"
+    [[ -d "${M_ROOT}" ]] || die_local "Failed to find muse root"
+    log_local "Found muse root (${M_ROOT})" "INFO"
+
+    M_MUSE_MAP="/var/tmp/muse/m_system/m_master_map"
+    M_INCLUDE_REGISTER="/var/tmp/muse/m_system/.master_include_register"
+set +a
+
+
+#======================================
+# Include our libraries etc.
+#======================================
+include cnxn.funcs
+include comm.funcs
+include common.funcs
+include constants.dat
+include db.funcs
+include env.dat 
+include master.funcs
+include master.env
+include print.funcs
+include sm.funcs
+include time.funcs
+include utils.funcs
+include msg.env
+include user.env
+
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - All include libraries added successfully" "INFO"
+
+#======================================
+# Find our error handler and then
+# Set up our runtime environment
+#======================================
+find_file m_exec_failure M_EXEC_FAILURE || die_local "Failed to find m_exec_failure"
+export M_EXEC_FAILURE=${M_EXEC_FAILURE}
+m_init 
+
+#======================================
+# Process the command line
+#======================================
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Parsing command line" "INFO"
+m_validate_cmd_line $@
+echo "$(date): INFO: MASTER - Command run was ($@)" >> "${M_QLOG}"
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Command Line ($@) parsed successfully. All items validated. " "INFO"
+
+
+if [[ ${M_ACTION} == NORUN ]] 
+then
+    #======================================
+    # Just a query so clean out the log 
+    # entries and exit 
+    #======================================
+    TF="/tmp/tf${RANDOM}"
+    while [[ -f "${TF}" ]]
+    do
+        TF="/tmp/tf${RANDOM}"
+    done
+
+    echo 
+
+    #======================================
+    # Remove query entries from main log
+    #======================================
+    head -n -1 < <(sed '/'${M_XID}'/q' "${M_LOG}") > "${TF}"
+    mv "${TF}" "${M_LOG}"
+    rm -f "${TF}"
+
+    exit 0 
+else
+    [[ ${M_LOG_LEVEL} == "DEBUG" ]] && 
+        m_log_msg "MASTER - Begining run. User tag - (${M_USR_TAG}) System tag - (${M_SYS_TAG})" "INFO"
+fi
+
+#======================================
+# Create our connections and launch
+# the remote slaves on each remote server
+#======================================
+m_write_action "ACT" "INITIALISE_COMMS"
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Launching connection manager" "INFO"
+
+#TODO decide if we need a timeout for this
+#m_get_epoch_milliseconds SM_TM
+#m_set_timer $(( SM_TM + (M_COMMS_INIT_TO * 1000))) "NULL" "CONFIRM_COMMS_INIT" "ACT"
+
+#======================================
+# Print the header
+#======================================
+m_write_action "ACT" "UPDATE_RUN_SCREEN_HEAD"
+m_write_action "ACT" "UPDATE_RUN_SCREEN_FOOT"
+
+#======================================
+# Initialise the state machine
+#======================================
+m_write_action "ACT" "CONFIRM_MUSE_READY_TO_RUN"
+m_write_action "ACT" "LAUNCH_SLAVES"
+m_write_action "ACT" "CHECK_COMMS"
+m_write_action "ACT" "CONFIRM_COMMS_OK"
+m_write_action "ACT" "CREATE_TX"
+m_write_action "ACT" "CREATE_RX"
+m_write_state "TRUE" "TASKS_IN_Q" 
+m_write_action "ACT" "SEND_TABLE_DUMP"
+SM_EXEC_ORDER=0
+echo "run" > "${M_MUSE_CTL_FILE}"
+m_get_tmp_file master_sm_1 SM_TMPFILE1
+m_get_tmp_file master_sm_2 SM_TMPFILE2
+
+#[[ ${M_LOG_LEVEL} == "DEBUG" ]] && echo "${M_MUSE_CTL_FILE}"
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - DB = ${M_DB}" "INFO"
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Main control directory (${M_CONTROL})" "INFO"
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Starting state machine" "INFO"
+
+SM_DBG_CNT=0
+M_CLOSED_CNXNS=$(wc -w < <(echo ${M_SERVER_LIST}))
+
+#======================================
+# Dump our var scope tables for slaves
+#======================================
+m_dump_tables SM_VAR_TABLES "var_map" "var_scope"
+
+#======================================
+# Enter the state machine
+#======================================
+
+while :
+do
+
+    #==============================================================
+    # Normal run mode, as opposed to recovery mode. Used to enact
+    # differing init sequences
+    #==============================================================
+    if [[ ${M_RUN_MODE} == "NORMAL" ]]
+    then
+
+        #======================================
+        # Check if all slaves are running
+        #======================================
+        if m_read_action "VERIFY_SLAVES_REGISTERED" 
+        then
+            if m_verify_slaves_registered
+            then
+                [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - All slaves registered" "INFO"
+                m_write_action "SKIP" "VERIFY_SLAVES_REGISTERED"
+                m_write_state "TRUE" "SLAVES_REGISTERED"
+                m_write_action "ACT" "UPDATE_RUN_SCREEN_FOOT"
+            fi
+        fi
+
+        #======================================
+        # Confirm we have started up ok. See
+        # CONFIRM_MUSE_STATUS action for running
+        # check of core components
+        #======================================
+        if m_read_action "CONFIRM_MUSE_READY_TO_RUN"
+        then
+            if m_confirm_master_state
+            then
+                m_write_state "TRUE" "MUSE_READY_TO_RUN"
+                m_write_action "ACT" "CHECK_FOR_ACK_TX"
+                m_write_action "ACT" "PROCESS_EXECUTION_THREADS"
+                m_write_action "ACT" "UPDATE_RUN_SCREEN_FOOT"
+                
+                [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Confirmed MUSE ready to run" "INFO"
+               
+                m_write_action "SKIP" "CONFIRM_MUSE_READY_TO_RUN"
+                m_write_action "ACT" "CONFIRM_MUSE_STATUS"
+            else
+                m_write_state "FALSE" "MUSE_READY_TO_RUN"
+            fi
+        fi
+    
+    elif [[ ${M_RUN_MODE} == "RECOVER" ]] 
+    then
+        #==============================================================
+        # Recovery mode
+        #==============================================================
+        m_fail 2 "Error: Run mode not yet coded (${M_RUN_MODE})  (master)" 
+    else
+        m_fail 2 "Error: Run mode unrecognised (${M_RUN_MODE})  (master)" 
+    fi
+
+    #==============================================================
+    # Event driven actions 
+    #==============================================================
+
+    if m_read_action "UPDATE_RUN_SCREEN_HEAD"
+    then
+        #======================================
+        # Update the run screen header
+        #======================================
+        m_print_master_header
+        m_write_action "SKIP" "UPDATE_RUN_SCREEN_HEAD"
+        m_write_action "ACT" "REFRESH_RUN_SCREEN"
+    fi
+
+    if m_read_action "UPDATE_RUN_SCREEN_FOOT"
+    then
+        #======================================
+        # Update the run screen footer
+        #======================================
+        m_print_run_footer
+        m_write_action "SKIP" "UPDATE_RUN_SCREEN_FOOT"
+        m_write_action "ACT" "REFRESH_RUN_SCREEN"
+    fi
+    
+    if m_read_action "REFRESH_RUN_SCREEN"
+    then
+        #======================================
+        # Run  screen needs redrawing
+        #======================================
+        clear
+        cat "${M_MAIN_SCREEN_HEAD}"
+        [[ -f "${M_MAIN_SCREEN_BODY}" ]] && cat "${M_MAIN_SCREEN_BODY}"
+        cat "${M_MAIN_SCREEN_FOOT}"
+        m_write_action "SKIP" "REFRESH_RUN_SCREEN"
+    fi
+
+    if m_read_action "REGISTER_PLUGIN_COMPLETE"
+    then
+        #======================================
+        # Slave reports the completion of a 
+        # plugin so update finish time in exec
+        #======================================
+        m_get_payload_from_state_machine "REGISTER_PLUGIN_COMPLETE" SM_PAYLOAD
+        SM_EXEC_ID=$(echo ${SM_PAYLOAD} | cut -d"," -f 1)
+        SM_FINISH_TIME=$(echo ${SM_PAYLOAD} | cut -d"," -f 2)
+        m_update_exec_data ${SM_EXEC_ID} finish_time "${SM_FINISH_TIME}"
+        m_update_exec_data ${SM_EXEC_ID} state 1
+        m_write_action "SKIP" "REGISTER_PLUGIN_COMPLETE"
+    fi
+    
+    if m_read_action "INITIALISE_COMMS"
+    then
+        #======================================
+        # Start up only. Launch the connection
+        # manager and confirm status.
+        #======================================
+        m_create_master_cnxns 
+        m_write_state "TRUE" "CNXN_MGR_RUNNING"
+        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Connect manager reported running" "INFO"
+        m_write_action "SKIP" "INITIALISE_COMMS"
+    fi
+
+    if m_read_action "CREATE_TX"
+    then
+        if m_read_state "CNXNS_OPEN"
+        then
+            m_create_master_tx
+            m_write_state "TRUE" "TX_OK"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Transmitter created successfully" "INFO"
+            m_write_action "SKIP" "CREATE_TX"
+        fi
+    fi
+
+    if m_read_action "CREATE_RX"
+    then
+        if m_read_state "CNXNS_OPEN"
+        then
+            m_create_rx
+            m_write_state "TRUE" "RX_OK"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Receiver created successfully" "INFO"
+            m_write_action "SKIP" "CREATE_RX"
+        fi
+    fi
+
+    if m_read_action "LAUNCH_SLAVES"
+    then
+        if m_read_state "COMMS_OK"
+        then
+            m_launch_slaves "${M_SERVER_LIST}" 
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Slave/s launched. Waiting for registration" "INFO"
+            m_write_action "ACT" "VERIFY_SLAVES_REGISTERED"
+            m_write_action "SKIP" "LAUNCH_SLAVES"
+        fi
+    fi
+
+    if m_read_action "CONFIRM_COMMS_OK"
+    then
+        SM_COMMS_STATE="UP"
+        if ! m_read_state "CNXNS_OPEN"
+        then
+            SM_COMMS_STATE=DOWN
+        fi 
+        if ! m_read_state "TX_OK"
+        then
+            SM_COMMS_STATE=DOWN
+        fi
+        if ! m_read_state "RX_OK"
+        then
+            SM_COMMS_STATE=DOWN
+        fi
+        if [[ ${SM_COMMS_STATE} == "UP" ]]
+        then
+            m_write_state "TRUE" "COMMS_OK"
+        fi
+    fi
+
+    #======================================
+    # Send the var dump to slaves
+    #======================================
+    if m_read_action "SEND_TABLE_DUMP"
+    then
+        if m_read_state "SLAVES_REGISTERED"
+        then
+            #======================================
+            # Propagate any run vars
+            #======================================
+            m_send_vars_to_slaves "${SM_VAR_TABLES}" ${M_SERVER_LIST}
+            m_write_state "TRUE" "DUMP_DISPATCHED"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Table dump dispatched to slaves. Vars propagated." "INFO"
+            m_write_action "SKIP" "SEND_TABLE_DUMP"
+        fi
+    fi
+
+    #======================================
+    # Register that a slave has loaded the
+    # var table dumps 
+    #======================================
+    if m_read_action "REGISTER_DUMP_LOADED"
+    then
+        m_get_payload_from_state_machine "REGISTER_DUMP_LOADED" SM_PAYLOAD
+        m_update_slave_register is_dump_loaded "YES" slave "${SM_PAYLOAD}"
+        
+        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Slave (${SM_PAYLOAD}) confirms table dump loaded." "INFO"
+        m_write_action "SKIP" "REGISTER_DUMP_LOADED"
+    fi
+
+    #======================================
+    # Check to see if all slaves have loaded
+    # the var dumps
+    #======================================
+    if m_read_action "CONFIRM_ALL_DUMPS_LOADED"
+    then
+        :>"${SM_TMPFILE1}"
+        m_select_records "select slave from slave_register where is_dump_loaded = 'NO'" "${SM_TMPFILE1}"
+        if ! [[ -s "${SM_TMPFILE1}" ]]
+        then
+            m_write_state "TRUE" "SLAVES_LOADED_DUMP"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - All slaves confirm table dump loaded." "INFO"
+            m_write_action "SKIP" "CONFIRM_ALL_DUMPS_LOADED"
+        fi
+    fi
+
+    if m_read_state "MUSE_READY_TO_RUN"
+    then
+        if m_read_action "PROCESS_EXECUTION_THREADS"
+        then
+            #======================================
+            # Process next line of any running threads
+            #======================================
+            m_get_executing_suites SM_SIDS
+            if [[ -s "${SM_SIDS}" ]]
+            then
+                while read SM_SID 
+                do
+                    #======================================
+                    # Found a suite that is executing. Get
+                    # line to execute and all siblings on
+                    # that line.
+                    #======================================
+                    m_get_exec_data ${SM_SID} exec_line SM_EL
+                    m_get_exec_data ${SM_SID} name SM_SUITE_NAME
+                    m_get_siblings_on_line ${SM_SID} ${SM_EL} SM_SIBS
+
+                    if [[ -s "${SM_SIBS}" ]] ## Siblings
+                    then
+                        #======================================
+                        # Test if line is already running or is
+                        # completed. NO? -> fresh line
+                        #======================================
+                        if m_test_for_new_line ${SM_SIBS}
+                        then
+                            SM_BG=1 ## Switch for BG job
+                            while read SM_SIB
+                            do
+                                m_get_epoch_milliseconds SM_TM
+                                m_get_exec_data ${SM_SIB} name SM_NAME
+                                m_get_exec_data ${SM_SIB} bg SM_BG
+                                m_get_exec_data ${SM_SIB} host SM_HOST
+                                case ${SM_NAME} in
+                                    ms_*)
+                                        #echo "Suite - ${SM_NAME}"
+                                        ## Set the exec line. Leave expansion until next iteration
+                                        m_update_exec_data ${SM_SIB} exec_line 1
+                                        m_update_exec_data ${SM_SIB} start_time ${SM_TM}
+                                        m_update_exec_data ${SM_SIB} state 0
+                                        ;;
+                                    m_*)
+                                        m_get_next_exec_order SM_EXEC_ORDER
+                                        
+                                        #======================================
+                                        # Run a plugin. Send msg to slave etc
+                                        #======================================
+                                        m_select_host_data "sname" "server_fqdn" "${SM_HOST}" SM_SHOST
+
+                                        printf " %-6s%-${M_JOB_LINE_WIDTH}s %s\n" \
+                                            "(${SM_EXEC_ORDER})" \
+                                                "$(echo $(date +"%H:%M:%S"): - ${SM_NAME} | cut -c 1-${M_JOB_LINE_WIDTH})" \
+                                                    "(${SM_SHOST})" >> "${M_MAIN_SCREEN_BODY}"
+
+                                        ## Schedule a screen refresh
+                                        m_write_action "ACT" "REFRESH_RUN_SCREEN"
+
+
+                                        ## Fields for msg body
+                                        m_get_md5sum ${SM_NAME} SM_MD5
+                                        
+                                        ## Send the msg
+                                        m_new_outbound_msg "0" "${SM_TM}" "${M_THREAD_ID}" "3" "$(hostname)" "${SM_HOST}" "EXECUTE_PLUGIN" \
+                                            "${SM_NAME},${SM_MD5},${SM_SIB},${SM_EXEC_ORDER}" "OUTBOUND" "NEW" "${M_SESSION_ID}" SM_MID
+                                        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && 
+                                            m_log_msg "MASTER - OUTBOUND MSG sent. Action = EXECUTE_PLUGIN, Payload = (${SM_NAME},${SM_MD5},${SM_SIB},${SM_EXEC_ORDER}),  Recipient = (${SM_HOST})"  "INFO"
+                                        
+                                        ## Update our control vars    
+                                        m_inc_thread_id
+                                        m_update_exec_data ${SM_SIB} start_time ${SM_TM}
+                                        
+                                        ## Record the run order
+                                        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Updating exec_order (${SM_EXEC_ORDER}) for plugin (${SM_NAME})" "INFO"
+                                        m_update_exec_data ${SM_SIB} exec_order ${SM_EXEC_ORDER}
+                                        
+                                        ## Set state to running
+                                        m_update_exec_data ${SM_SIB} state 0
+
+                                        ## Set a timer to check for ack
+                                        m_set_timer $(( SM_TM + (M_ACK_TO * 1000))) "${SM_MID}" "CHECK_ACK_RECEIVED" "ACT"
+                                        ;;
+                                    *) 
+                                        m_fail 2 "Error: Unrecognised name format. (${SM_NAME}) (PROCESS_EXECUTION_THREADS)"
+                                        ;;
+                                esac
+                            done < "${SM_SIBS}"
+                                
+                            #======================================
+                            # If a BG line then inc exec_line for
+                            # this suite record
+                            #======================================
+                            if [[ ${SM_BG} -eq 0 ]]
+                            then
+                                m_get_exec_data ${SM_SID} exec_line SM_EL
+                                m_update_exec_data ${SM_SID} exec_line $(( SM_EL + 1 ))
+                            fi
+                        
+                        elif m_test_for_completed_line ${SM_SIBS}
+                        then
+                            ## Line complete so inc exec line in suite record
+                            m_get_exec_data ${SM_SID} exec_line SM_EL
+                            m_update_exec_data ${SM_SID} exec_line $(( SM_EL + 1 ))
+                            #echo "Line complete - ${SM_EL}"
+                        fi
+                    else
+                        ## Past last line of suite so suite is finished
+                        m_update_exec_data ${SM_SID} finish_time $(date +%s)
+                        m_update_exec_data ${SM_SID} exec_line 0
+                        m_update_exec_data ${SM_SID} state 1
+                        #echo "Finish - ${SM_SUITE_NAME}"
+                    fi
+                done < "${SM_SIDS}"
+            else
+                #======================================
+                # Nothing left to execute, shut up shop
+                #======================================
+                m_write_action "SKIP" "PROCESS_EXECUTION_THREADS"
+                m_write_state "FALSE" "TASKS_IN_Q"
+                [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - All suites parsed and executed. Waiting for plugins to complete." "INFO"
+            fi
+        fi
+    fi
+
+
+    #======================================
+    # New msgs in DB to action
+    #======================================
+    if m_read_action "PROCESS_MSG_Q"
+    then
+        #======================================
+        # Query the msgs table for any with a 
+        # status of new and direction of inbound
+        # and then set the action for handler
+        #======================================
+        m_get_msg_q SM_MSGS_ID
+        if [[ "${SM_MSGS_ID}" =~ ^[[:digit:]]+$ ]]  
+        then
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Found msg record in db. ID = (${SM_MSGS_ID})" "INFO"
+
+            #======================================
+            # Get the action flag 
+            #======================================
+            m_get_action_from_msg ${SM_MSGS_ID} SM_ACTION 
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - MSG parsed - ACTION = (${SM_ACTION})" "INFO"
+            
+            if [[ "${SM_ACTION}" != "ACK" ]] 
+            then
+                #======================================
+                # Set the action and payload
+                #======================================
+                m_get_payload_from_msg ${SM_MSGS_ID} SM_PAYLOAD
+                [[ -n "${SM_PAYLOAD}" ]] || m_fail 2 "Error: Payload expected for msg (${SM_MSGS_ID}) (PROCESS_MSG_Q)"
+                m_write_action "ACT" "${SM_ACTION}"
+                m_set_action_payload "${SM_PAYLOAD}" "${SM_ACTION}"
+                m_set_action_msg_id "${SM_MSGS_ID}" "${SM_ACTION}"
+                #======================================
+                # Schedule an ACK
+                #======================================
+                m_set_ack ${SM_MSGS_ID} 0
+            else
+                #======================================
+                # Update the originating msg ack field
+                #======================================
+                m_get_msg "${SM_MSGS_ID}" SM_MSG "INBOUND"
+                SM_PAYLOAD=$(echo "${SM_MSG}" | cut -d"|" -f ${M_MSG_PAYLOAD})
+                [[ ${SM_PAYLOAD} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Failed to find payload for msg (${SM_MSGS_ID}) (PROCESS_MSG_Q)" 
+                m_update_msgs_table "ack" 0 "msgs_id" "${SM_PAYLOAD}"
+                [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - ACK received for msg (${SM_PAYLOAD})" "INFO"
+            fi
+
+            m_update_msgs_table "status" "PROCESSED" "msgs_id" "${SM_MSGS_ID}"
+            m_write_action "SKIP" "PROCESS_MSG_Q"
+        fi
+    fi
+
+    #======================================
+    # Check if any ACK's scheduled in ack_ctl
+    #======================================
+    if m_read_state "MUSE_READY_TO_RUN"
+    then
+        if m_read_action "CHECK_FOR_ACK_TX"
+        then
+            #======================================
+            # Get ack q
+            #======================================
+            m_get_ack_q SM_ACK_Q
+            if [[ -s "${SM_ACK_Q}" ]]
+            then
+                while read SM_MSGS_ID
+                do
+                    m_get_msg ${SM_MSGS_ID} SM_MSG "INBOUND"
+                    [[ -n ${SM_MSG} ]] || m_fail 2 "Error: Failed to retrieve message with ID (${SM_MSGS_ID}) (CHECK_FOR_ACK_TX)" 
+                    SM_MSG_SENDER_ID=$(echo "${SM_MSG}" | cut -d"|" -f ${M_MSG_SENDER_ID})
+                    SM_MSG_SENDER=$(echo "${SM_MSG}" | cut -d"|" -f ${M_MSG_SENDER})
+                    SM_MSG_THREAD_ID=$(echo "${SM_MSG}" | cut -d"|" -f ${M_MSG_THREAD_ID})
+                    m_get_epoch_milliseconds SM_TM
+                    m_new_outbound_msg "0" "${SM_TM}" "${SM_MSG_THREAD_ID}" "2" "$(hostname)" "${SM_MSG_SENDER}" "ACK" "${SM_MSG_SENDER_ID}" "OUTBOUND" "NEW" "${M_SESSION_ID}" SM_MID
+                    m_inc_thread_id
+                    m_update_ack_ctl_table "sent" "${SM_TM}" "msgs_id" "${SM_MSGS_ID}"
+                    [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Outbound msg sent. Action = ACK, Payload = (${SM_MSG_SENDER_ID}),  Recipient = (${SM_MSG_SENDER})" "INFO"
+                done < "${SM_ACK_Q}"
+            fi
+        fi
+    fi
+
+    #======================================
+    # Confirm we have received an ACK for a 
+    # message sent previously within time
+    #======================================
+    if m_read_action "CHECK_ACK_RECEIVED"
+    then
+        m_get_payload_from_state_machine "CHECK_ACK_RECEIVED" SM_PAYLOAD
+        [[ ${SM_PAYLOAD} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Message id expected. (CHECK_ACK_RECEIVED)" 
+        m_get_msg ${SM_PAYLOAD} SM_MSG "OUTBOUND"
+        [[ -n ${SM_MSG} ]] || m_fail 2 "Error: Failed to recover msg with id (${SM_PAYLOAD}) (CHECK_ACK_RECEIVED)" 
+        SM_ACK=$(echo ${SM_MSG} | cut -d"|" -f ${M_MSG_ACK})
+        if [[ ${SM_ACK} -eq 1 ]]
+        then
+            ## No ack received within timeout so mark as fail with 2
+            m_update_msgs_table "ack" 2 "msgs_id" ${SM_PAYLOAD}
+        fi
+        m_write_action "SKIP" "CHECK_ACK_RECEIVED"
+    fi
+
+    #======================================
+    # Register a new listener for a slave
+    #======================================
+    if m_read_action "REGISTER_SLAVE"
+    then
+        #======================================
+        # Update the slave register table
+        #======================================
+        m_get_payload_from_state_machine "REGISTER_SLAVE" SM_PAYLOAD
+        m_get_msg_id_from_state_machine "REGISTER_SLAVE" SM_MSGS_ID
+        m_get_msg "${SM_MSGS_ID}" SM_MSG "INBOUND"
+        [[ -n ${SM_MSG} ]] || m_fail 2 "Error: Failed to retrieve message with ID (${SM_MSGS_ID}) (REGISTER_SLAVE)" 
+        SM_HOST=$(echo "${SM_MSG}" | cut -d"|" -f ${M_MSG_SENDER})
+        m_update_slave_register "control" "${SM_PAYLOAD}" "slave" "${SM_HOST}"
+        m_update_slave_register "in_buffer" "${SM_PAYLOAD}/in_buffer" "slave" "${SM_HOST}"
+        m_update_slave_register "is_registered" "YES" "slave" "${SM_HOST}"
+
+        #======================================
+        # Update the register file for TX
+        #======================================
+        if [[ -w "${M_SLAVE_REGISTER}" ]]
+        then
+            :>"${SM_TMPFILE1}"
+            while read SM_LINE
+            do
+                if [[ $(echo "${SM_LINE}" | cut -d"|" -f 1) == "${SM_HOST}" ]]
+                then
+                    echo "${SM_LINE}|${SM_PAYLOAD}/in_buffer" >> "${SM_TMPFILE1}"
+                else
+                    echo "${SM_LINE}" >> "${SM_TMPFILE1}"
+                fi
+            done < "${M_SLAVE_REGISTER}"
+
+            mv "${SM_TMPFILE1}"  "${M_SLAVE_REGISTER}" || m_fail 2 "Error: Register move failed (REGISTER_SLAVE)" 
+        else
+            m_fail 2 "Error: Slave register (${M_SLAVE_REGISTER}) not found (REGISTER_SLAVE)"
+        fi
+
+        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg  "MASTER - Successfully registered slave (${SM_HOST})" "INFO"
+        m_write_action "SKIP" "REGISTER_SLAVE"
+    fi
+
+    #======================================
+    # Internal fatal error in Slave
+    #======================================
+    if m_read_action "HANDLE_FATAL_ERROR"
+    then
+        #======================================
+        # Tell all slaves to shut down and wait
+        # until all completed
+        #======================================
+        m_get_payload_from_state_machine "HANDLE_FATAL_ERROR" SM_ERR_MSG
+        m_log_msg "MASTER - Fatal error received. (${SM_ERR_MSG})"  "ERROR"
+        #======================================
+        # Initiate shutdown
+        #======================================
+        m_write_action "ACT" "SHUTDOWN_MUSE"
+        #======================================
+        # Stop launching any more plugins
+        #======================================
+        m_write_state "FALSE" "MUSE_READY_TO_RUN"
+
+        m_write_action "SKIP" "HANDLE_FATAL_ERROR"
+        m_write_state "TRUE" "ERRORS_OCCURRED"
+    fi
+
+    #======================================
+    # Internal non fatal error in Slave
+    #======================================
+    if m_read_action "HANDLE_NON_FATAL_ERROR"
+    then
+        #======================================
+        # Log the error msg.
+        # Update the screen file
+        # Update the report summary
+        #======================================
+        m_get_payload_from_state_machine "HANDLE_NON_FATAL_ERROR" SM_ERR_MSG
+        m_log_msg "MASTER - Non fatal error received. (${SM_ERR_MSG})"  "ERROR"
+        m_write_action "SKIP" "HANDLE_NON_FATAL_ERROR"
+        m_write_state "TRUE" "ERRORS_OCCURRED"
+    fi
+
+    #==============================================================
+    # Persistent actions 
+    #==============================================================
+
+    #======================================
+    # Confirm MUSE status
+    #======================================
+    if m_read_action "CONFIRM_MUSE_STATUS"
+    then
+        if ! m_confirm_master_core
+        then
+                #======================================
+                # Hand this back to CONFIRM_MUSE_READY_TO_RUN
+                #======================================
+                m_write_state "FALSE" "MUSE_READY_TO_RUN"
+                m_write_action "SKIP" "PROCESS_EXECUTION_THREADS"
+                m_write_action "ACT" "CONFIRM_MUSE_READY_TO_RUN"
+                #======================================
+                # If something has reset the core state
+                # then it should also have updated the
+                # screen file so:
+                #======================================
+                m_write_action "ACT" "UPDATE_RUN_SCREEN_FOOT"
+
+                #======================================
+                # Disable this action until re enabled
+                # by CONFIRM_MUSE_READY_TO_RUN
+                #======================================
+                m_write_action "SKIP" "CONFIRM_MUSE_STATUS"
+        fi
+    fi
+
+    #======================================
+    # Check if the run is completed. If no 
+    # more tasks in Q and all report 
+    # completed then shutdown
+    #======================================
+    if m_read_action "CHECK_RUN_COMPLETE"
+    then
+        if ! m_read_state "TASKS_IN_Q"
+        then
+            #======================================
+            # If we have tasks that have not run
+            # and no more tasks in q then we have a 
+            # logic error. Emergency stop
+            #======================================
+            :>"${SM_TMPFILE1}"
+            m_get_exec_state 2 "${SM_TMPFILE1}"
+            if [[ -s "${SM_TMPFILE1}" ]]
+            then
+                [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - No more tasks in Q but exec records found with state not run. Record ID's in (${SM_TMPFILE1})"  "ERROR"
+                m_write_action "ACT" "STOP_MUSE"
+                m_write_action "SKIP" "CHECK_RUN_COMPLETE"
+            else
+                #======================================
+                # If we still have running jobs then 
+                # wait for them to complete
+                #======================================
+                :>"${SM_TMPFILE1}"
+                m_get_exec_state 0 "${SM_TMPFILE1}"
+                if ! [[ -s "${SM_TMPFILE1}" ]]
+                then
+                    m_write_action "ACT" "SHUTDOWN_MUSE"
+                    m_write_action "SKIP" "CHECK_RUN_COMPLETE"
+                    [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - No more tasks in Q. All tasks have state complete. Shutting down."  "INFO"
+                fi
+            fi
+        fi
+    fi
+
+    #======================================
+    # Check the in_pending dir for msgs and
+    # write to msgs table in db
+    #======================================
+    if m_read_action "CHECK_MSGS"
+    then
+        if m_check_msgs_in_pending
+        then
+            m_write_action "ACT" "PROCESS_MSG_Q"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - MSG's found in in_pending dir" "INFO"
+        fi
+    fi
+    #======================================
+    # Check COMMS status
+    #======================================
+    if m_read_action "CHECK_COMMS"
+    then
+        if ! grep "CLOSED" "${M_CNXN_STATUS_FILE}"
+        then
+            m_write_state "TRUE" "CNXNS_OPEN"
+        else
+            m_write_state "FALSE" "CNXNS_OPEN"
+        fi
+        M_OPEN_CNXNS=$(wc -l < <(grep -n OPEN "${M_CNXN_STATUS_FILE}"))
+        M_CLOSED_CNXNS=$(wc -l < <(grep -n CLOSED "${M_CNXN_STATUS_FILE}"))
+    fi
+
+    #======================================
+    # Check the timer table for expired timers
+    #======================================
+    if m_read_action "CHECK_TIMERS"
+    then
+        m_get_expired_timers SM_EXPIRED_TIMERS
+        if [[ -s ${SM_EXPIRED_TIMERS} ]]
+        then
+            while read SM_LINE
+            do
+                #======================================
+                # Set the actions for the expired timer
+                #======================================
+                SM_ACTION=$(echo ${SM_LINE} | cut -d"|" -f ${C_TIMER_ACTION})
+                SM_TID=$(echo ${SM_LINE} | cut -d"|" -f ${C_TIMER_ID})
+                SM_PAYLOAD=$(echo ${SM_LINE} | cut -d"|" -f ${C_TIMER_PAYLOAD})
+                m_get_action_from_state_machine "${SM_ACTION}" SM_STATE
+                [[ (${SM_STATE} == "ACT") || (${SM_STATE} == "SKIP") ]] || m_fail 3 "Error: Action recovered (${SM_LINE}) not found in DB (CHECK_TIMERS)"
+                m_set_action_payload "${SM_PAYLOAD}" "${SM_ACTION}"
+                m_write_action "ACT" "${SM_ACTION}"
+                #======================================
+                # Cancel the expired timer
+                #======================================
+                m_update_timer_table "is_set" 1 "timer_id" "${SM_TID}"
+            done < "${SM_EXPIRED_TIMERS}"
+        fi
+    fi
+
+    #======================================
+    # Check for any plugin results 
+    #======================================
+    if m_read_action "CHECK_FOR_NEW_REPORTS"
+    then
+         if m_check_for_rpts_in_buffer SM_REPORT
+         then
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Report found in buffer (${SM_REPORT})"  "INFO"
+            m_set_action_payload "${SM_REPORT}" "PROCESS_NEW_REPORT"
+            m_write_action "ACT" "PROCESS_NEW_REPORT"
+         fi
+    fi
+
+    #======================================
+    # Process a newly arrived report
+    #======================================
+    if m_read_action "PROCESS_NEW_REPORT"
+    then
+        # TODO Parse the report, update summaries, update screen
+        m_get_payload_from_state_machine "PROCESS_NEW_REPORT" SM_REPORT
+        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Processing Report (${SM_REPORT})"  "INFO"
+        m_parse_report "${SM_REPORT}"
+        m_write_action "SKIP" "PROCESS_NEW_REPORT"
+    fi
+
+    #==============================================================
+    # Shutdown actions 
+    #==============================================================
+    if m_read_action "CHECK_CTL_FILE_FOR_STOP"
+    then
+        ## Stop is emergency stop across cluster
+        if grep "stop" "${M_MUSE_CTL_FILE}" > /dev/null 2>&1
+        then
+            m_write_action "ACT" "STOP_MUSE"
+            m_write_action "SKIP" "CHECK_CTL_FILE_FOR_STOP"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Stop in control file (${M_MUSE_CTL_FILE}) detected"  "INFO"
+        fi
+    fi
+
+    if m_read_action "CHECK_CTL_FILE_FOR_SHUTDOWN"
+    then
+        ## Shutdown is gracefull exit after all running jobs complete.
+        ## Any jobs in Q are not launched
+        if grep "shutdown" "${M_MUSE_CTL_FILE}" > /dev/null 2>&1
+        then
+            m_write_action "ACT" "SHUTDOWN_MUSE"
+            m_write_action "SKIP" "CHECK_CTL_FILE_FOR_SHUTDOWN"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Shutdown in control file (${M_MUSE_CTL_FILE}) detected" "INFO"
+        fi
+    fi
+
+    if m_read_action "STOP_MUSE"
+    then
+        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Action = STOP_MUSE. Stopping" "INFO"
+        #======================================
+        # Process a clean shutdown. Tell all
+        # slaves to exit
+        #======================================
+        SM_SHUTDOWN_MSGSID_LIST=""
+        for SM_HOST in ${M_SERVER_LIST}
+        do
+            m_get_epoch_milliseconds SM_TM
+            m_new_outbound_msg "0" "${SM_TM}" "${M_THREAD_ID}" "1" "$(hostname)" "${SM_HOST}" "SHUTDOWN_MUSE" "NULL" "OUTBOUND" "NEW" "${M_SESSION_ID}" SM_MID
+            SM_SHUTDOWN_MSGS_ID_LIST="${SM_SHUTDOWN_MSGS_ID_LIST} ${SM_MID}"
+            m_inc_thread_id
+            m_set_timer $(( SM_TM + (M_ACK_TO * 1000))) "${SM_MID}" "CHECK_ACK_RECEIVED" "ACT"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Outbound msg sent. Action = SHUTDOWN_MUSE, Recipient = ${SM_HOST}" "INFO"
+        done
+        #======================================
+        # Messages sent. Trust to providence 
+        # they all shut down.
+        #======================================
+        # TODO update screen file
+        break
+    fi
+    
+    if m_read_action "SHUTDOWN_MUSE"
+    then
+        if ! m_read_state "SHUTDOWN_MSGS_SENT"
+        then
+            #======================================
+            # Process a clean shutdown. Tell all
+            # slaves to exit
+            #======================================
+            SM_SHUTDOWN_MSGSID_LIST=""
+            for SM_HOST in ${M_SERVER_LIST}
+            do
+                m_get_epoch_milliseconds SM_TM
+                m_new_outbound_msg "0" "${SM_TM}" "${M_THREAD_ID}" "1" "$(hostname)" "${SM_HOST}" "SHUTDOWN_MUSE" "NULL" "OUTBOUND" "NEW" "${M_SESSION_ID}" SM_MID
+                SM_SHUTDOWN_MSGS_ID_LIST="${SM_SHUTDOWN_MSGS_ID_LIST} ${SM_MID}"
+                m_inc_thread_id
+                m_set_timer $(( SM_TM + (M_ACK_TO * 1000))) "${SM_MID}" "CHECK_ACK_RECEIVED" "ACT"
+                [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Outbound msg sent. Action = SHUTDOWN_MUSE, Recipient = ${SM_HOST}" "INFO"
+            done
+            m_set_action_payload "${SM_SHUTDOWN_MSGS_ID_LIST}" "CONFIRM_ALL_SLAVES_EXITED"
+
+            #======================================
+            # All slaves should exit within
+            # M_SLAVE_EXIT_TO seconds of last msg.
+            #======================================
+            m_set_timer $(( SM_TM + (M_SLAVE_EXIT_TO * 1000))) "NULL" "SLAVES_FAILED_TO_SHUTDOWN" "ACT"
+            m_write_state "TRUE" "SHUTDOWN_MSGS_SENT"
+            m_write_action "SKIP" "SHUTDOWN_MUSE"
+            m_write_action "ACT" "CONFIRM_ALL_SLAVES_EXITED"
+
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Action = SHUTDOWN_MUSE. Initiating Shutdown Sequence" "INFO"
+        fi
+    fi
+
+    if m_read_action "CONFIRM_ALL_SLAVES_EXITED"
+    then
+        #======================================
+        # Having sent a shutdown msg to the
+        # slaves we should now confirm that 
+        # they have all replied with ACK.
+        #======================================
+        SM_ALL_ACKNOWLEDGED="TRUE"
+        m_get_payload_from_state_machine "CONFIRM_ALL_SLAVES_EXITED" SM_SHUTDOWN_MSGS_ID_LIST
+        [[ -n ${SM_SHUTDOWN_MSGS_ID_LIST} ]] || m_fail 2 "Error: Failed to recover shutdown msg id list. (CONFIRM_ALL_SLAVES_EXITED)" 
+
+        #======================================
+        # Confirm all shutdown msgs have an ack
+        #======================================
+        for SM_MSGS_ID in ${SM_SHUTDOWN_MSGS_ID_LIST}
+        do
+            m_get_msg ${SM_MSGS_ID} SM_MSG "OUTBOUND"
+            [[ -n ${SM_MSG} ]] || m_fail 2 "Error: Failed to recover msg with id (${SM_MSGS_ID}) (CONFIRM_ALL_SLAVES_EXITED)" 
+            SM_ACK=$(echo ${SM_MSG} | cut -d"|" -f ${M_MSG_ACK})
+            [[ ${SM_ACK} -eq 0 ]] || SM_ALL_ACKNOWLEDGED="FALSE"
+        done
+
+        if [[ ${SM_ALL_ACKNOWLEDGED} == "TRUE" ]]
+        then
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - All Slaves have acknowledged shutdown msg. Exiting" "INFO"
+            break
+        fi
+    fi
+
+    if m_read_action "SLAVES_FAILED_TO_SHUTDOWN"
+    then
+        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Not all Slaves have acknowledged shutdown msg. Exiting" "ERROR"
+        m_fail 2 "Error: Slave/s have not acknowledged shutdown msg within timeout. (SLAVES_FAILED_TO_SHUTDOWN)" 
+        m_write_action "SKIP" "SLAVES_FAILED_TO_SHUTDOWN"
+        break
+    fi
+
+done
+
+#======================================
+# Cleanup
+#======================================
+# TODO m_post_run_tasks currenly handles error parsing
+# need to do this as an action when results received at runtime
+
+#======================================
+# Clear the run status and just print
+# the run details
+#======================================
+clear
+cat "${M_MAIN_SCREEN_HEAD}"
+[[ -f "${M_MAIN_SCREEN_BODY}" ]] && cat "${M_MAIN_SCREEN_BODY}"
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - All processes complete. Exiting" "INFO"
+
+if m_read_state "ERRORS_OCCURRED"
+then
+    m_print_error_footer
+    exit 1
+else
+    m_print_master_footer
+    exit 0
+fi
+

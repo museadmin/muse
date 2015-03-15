@@ -1,0 +1,211 @@
+##############################################################
+##
+## Name		    :	cnxn.funcs
+## Author	    :	Bradley Atkins
+## Description	:	
+## Date		    :	20/07/2013
+## Args		    :	
+## Status	    :	Reviewed 	[n]
+##			        Tested 		[n]
+##			        Released 	[n]
+##############################################################
+
+
+##############################################################
+##
+## Name		    :	m_create_master_cnxns
+## Author	    :	Bradley Atkins
+## Description	:	Create the initial pool of connections
+## Date		    :	20/07/2013
+## Args		    :	
+## Status	    :	Reviewed 	[n]
+##			        Tested 		[n]
+##			        Released 	[n]
+##############################################################
+m_create_master_cnxns()
+{
+    #======================================
+    # Setup and Validation
+    #======================================
+    [[ -n ${M_SERVER_LIST} ]] || m_fail 2 "Error: Server list empty (${FUNCNAME})" 
+    M_SERVER_LIST=$(echo ${M_SERVER_LIST} | tr " " "\n" | sort -u | tr "\n" " ")
+    M_NUM_SERVERS=$(echo ${M_SERVER_LIST} | wc -w)
+    [[ ${M_NUM_SERVERS} =~ ^[0-9]$ ]] || m_fail 2 "Error: Number of servers failed validation (${FUNCNAME})"
+    [[ -n ${M_MSG_USR} ]] || m_fail 2 "Error: Muse user not set (${FUNCNAME})" 
+    [[ -n "${M_CNXN_PATH}" ]] || m_fail 2 "Error: Connection path not set (${FUNCNAME})" 
+
+    local SSH_KEY= SSH_CFG= MGR= CNXN_MGR=  CNXN_MGR_PID= HOST= IN_BUFFER= CNXN= LINE= TO=
+
+    #======================================
+    # SSH configuration
+    #======================================
+    m_find_file musemsg.key SSH_KEY || m_fail 2 "Error: Failed to find ssh key musemsg.key (${FUNCNAME})" 
+    cp "${SSH_KEY}" ${HOME}/.ssh || m_fail 2 "Error: Failed to copy key to .ssh dir. (${FUNCNAME})" 
+    SSH_KEY="${HOME}/.ssh/musemsg.key"
+    chmod 600 "${SSH_KEY}" || m_fail 2 "Error: Failed to set permissions for msg key. (${FUNCNAME})" 
+    m_find_file muse.ssh.cfg SSH_CFG || m_fail 2 "Error: Failed to find muse.ssh.cfg (${FUNCNAME})" 
+    
+    #======================================
+    # The connection Manager
+    #======================================
+    m_find_file master_cnxn_mgr MGR || m_fail 2 "Error: Failed to find master_cnxn_mgr (${FUNCNAME})"
+    CNXN_MGR="${M_CONTROL}/master_cnxn_mgr"
+    cp "${MGR}" "${CNXN_MGR}" || m_fail 2 "Error: Failed to copy connection manager to control dir. (${FUNCNAME})" 
+    [[ -f "${CNXN_MGR}" ]] || m_fail 2 "Error: Failed to find copied connection manager. (${FUNCNAME})" 
+
+    if [[ ${M_LOG_LEVEL} == "DEBUG" ]]
+    then
+        m_log_msg "CNXN - Connection path = ${M_CNXN_PATH}" "INFO"
+        m_log_msg "CNXN - Message user = ${M_MSG_USR}" "INFO"
+        m_log_msg "CNXN - RUN ID = ${M_RUN_ID}" "INFO" "INFO"
+        m_log_msg "CNXN - Server list = ${M_SERVER_LIST}" "INFO"
+    fi
+
+    "${CNXN_MGR}" "${M_CNXN_PATH}" ${M_MSG_USR} "${SSH_CFG}" ${M_RUN_ID} "${SSH_KEY}" "${M_LOG}" "${M_CONTROL}" "${M_SLAVE_REGISTER}" "${M_SERVER_LIST}" >/dev/null 2>&1 &
+    CNXN_MGR_PID=$!
+
+    #======================================
+    # Wait for connection control file to appear
+    #======================================
+    M_CNXN_DIR="${M_CNXN_PATH}_${M_RUN_ID}"
+    M_CNXN_CTL_FILE="${M_CNXN_DIR}/master_cnxn_mgr.ctl"
+    M_CNXN_STATUS_FILE="${M_CNXN_DIR}/master_cnxn_mgr.status"
+
+    if [[ ${M_LOG_LEVEL} == "DEBUG" ]]
+    then
+        m_log_msg "CNXN - M_CNXN_DIR = ${M_CNXN_DIR}" "INFO"
+        m_log_msg "CNXN - M_CNXN_CTL_FILE = ${M_CNXN_CTL_FILE}" "INFO"
+    fi
+
+    TO=${M_CNXN_TO}
+    while ! ls "${M_CNXN_CTL_FILE}" > /dev/null 2>&1
+    do  
+        TO=$(( TO - 1 )) 
+        [[ ${TO} -eq 0 ]] && m_fail 2 "Error: Connection Manager Timed Out (${FUNCNAME})"
+        sleep 1
+    done
+
+    [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "CNXN - Connection control file created" "INFO"
+
+    #======================================
+    # Look for status in ctl file
+    #======================================
+    TO=${M_CNXN_TO}
+    while [[ $(head -n 1 "${M_CNXN_CTL_FILE}") != "running" ]] 
+    do
+        TO=$(( TO - 1 ))
+        [[ ${TO} -eq 0 ]] && m_fail 2 "Error: cnxn manager failed to start (${FUNCNAME})" 
+        sleep 1
+    done
+    [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "CNXN - Connection manager reported running in connection control file" "INFO"
+
+    #======================================
+    # Wait for the cnxn mgr to create all cnxns
+    #======================================
+    while [[ $(echo ${M_SERVER_LIST} | wc -w) -ne $(wc -l "${M_SLAVE_REGISTER}" | cut -d" " -f1) ]]
+    do
+        sleep 1
+        TO=$(( TO - 1 ))
+        [[ ${TO} -eq 0 ]] && m_fail 2 "Error: Timeout waiting for connection manager to create cnxn's (${FUNCNAME})"
+    done
+    [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "CNXN - Connection manager has registered all connections" "INFO"
+
+    while read LINE
+    do
+        #======================================
+        # Update slave register table in db 
+        #======================================
+        HOST=$(echo ${LINE} | cut -d"|" -f1)
+        [[ -n ${HOST} ]] || m_fail 2 "Error: Failed to parse host name (${FUNCNAME})"
+        CNXN=$(echo ${LINE} | cut -d"|" -f2)
+        [[ -n ${CNXN} ]] || m_fail 2 "Error: Failed to parse cnxn (${FUNCNAME})"
+        m_insert_into_slave_register "${HOST}" "pending" "${CNXN}"
+    done < "${M_SLAVE_REGISTER}"
+
+}
+
+##############################################################
+##
+## Name		    :	m_create_slave_cnxns
+## Author	    :	Bradley Atkins
+## Description	:	Create the connection to the master
+## Date		    :	20/07/2013
+## Args		    :	
+## Status	    :	Reviewed 	[n]
+##			        Tested 		[n]
+##			        Released 	[n]
+##############################################################
+m_create_slave_cnxns()
+{
+    #======================================
+    # Setup and Validation
+    #======================================
+    [[ -n ${M_SERVER_LIST} ]] || m_fail 2 "Error: Server list empty (${FUNCNAME})" 
+    M_SERVER_LIST=$(echo ${M_SERVER_LIST} | tr " " "\n" | sort -u | tr "\n" " ")
+    M_NUM_SERVERS=$(echo ${M_SERVER_LIST} | wc -w)
+    [[ ${M_NUM_SERVERS} =~ ^[0-9]$ ]] || m_fail 2 "Error: Number of servers failed validation (${FUNCNAME})"
+    [[ -n ${M_MSG_USR} ]] || m_fail 2 "Error: Muse user not set (${FUNCNAME})" 
+    [[ -n "${M_CNXN_PATH}" ]] || m_fail 2 "Error: Connection path not set (${FUNCNAME})" 
+
+    ##======================================
+    ## SSH Configuration
+    ##======================================
+    m_find_file musemsg.key SSH_KEY || m_fail 2 "Error: Failed to find ssh key musemsg.key (${FUNCNAME})" 
+    cp "${SSH_KEY}" ${HOME}/.ssh || m_fail 2 "Error: Failed to copy key to .ssh dir. (${FUNCNAME})" 
+    SSH_KEY="${HOME}/.ssh/musemsg.key"
+    chmod 600 "${SSH_KEY}" || m_fail 2 "Error: Failed to set permissions for msg key. (${FUNCNAME})" 
+    m_find_file muse.ssh.cfg SSH_CFG || m_fail 2 "Error: Failed to find muse.ssh.cfg (${FUNCNAME})" 
+    ##======================================
+    ## The connection Manager
+    ##======================================
+    m_find_file slave_cnxn_mgr MGR || m_fail 2 "Error: Failed to find master_cnxn_mgr (${FUNCNAME})"
+    CNXN_MGR="${M_CONTROL}/slave_cnxn_mgr"
+    cp "${MGR}" "${CNXN_MGR}" || m_fail 2 "Error: Failed to copy connection manager to control dir. (${FUNCNAME})" 
+    [[ -f "${CNXN_MGR}" ]] || m_fail 2 "Error: Failed to find copied connection manager. (${FUNCNAME})" 
+
+    if [[ ${M_LOG_LEVEL} == "DEBUG" ]]
+    then
+        m_log_msg "CNXN - Connection path = ${M_CNXN_PATH}" "INFO"
+        m_log_msg "CNXN - Message user = ${M_MSG_USR}" "INFO"
+        m_log_msg "CNXN - RUN ID = ${M_RUN_ID}" "INFO" "INFO"
+        m_log_msg "CNXN - Server list = ${M_SERVER_LIST}" "INFO"
+    fi
+
+    "${CNXN_MGR}" "${M_CNXN_PATH}" ${M_MSG_USR} "${SSH_CFG}" ${M_RUN_ID} "${SSH_KEY}" "${M_SERVER_LIST}" >/dev/null 2>&1 &
+    CNXN_MGR_PID=$!
+
+    ##======================================
+    ## Wait for connection control file to appear
+    ##======================================
+    M_CNXN_DIR="${M_CNXN_PATH}_${M_RUN_ID}"
+    M_CNXN_CTL_FILE="${M_CNXN_DIR}/slave_cnxn_mgr.ctl"
+
+    if [[ ${M_LOG_LEVEL} == "DEBUG" ]]
+    then
+        m_log_msg "CNXN - M_CNXN_DIR = ${M_CNXN_DIR}" "INFO"
+        m_log_msg "CNXN - M_CNXN_CTL_FILE = ${M_CNXN_CTL_FILE}" "INFO"
+    fi
+
+    TO=0
+    while ! ls "${M_CNXN_CTL_FILE}" > /dev/null 2>&1
+    do  
+        TO=$(( TO + 1 )) 
+        [[ ${TO} -gt 20 ]] && m_fail 1 "Error: Connection Manager Timed Out (${FUNCNAME})"
+        sleep .5
+    done
+
+    [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "SLAVE - Connection control file created m_create_slave_cnxns" "INFO"
+
+    ##======================================
+    ## Look for status in ctl file
+    ##======================================
+    TO=0
+    while [[ $(head -n 1 "${M_CNXN_CTL_FILE}") != "running" ]] 
+    do
+        TO=$(( TO + 1 ))
+        [[ ${TO} -gt 20 ]] && m_fail 1 "Error: cnxn manager failed to start (${FUNCNAME})" 
+        sleep 1
+    done
+
+    [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "SLAVE - Connection manager reported running in connection control file" "INFO"
+}

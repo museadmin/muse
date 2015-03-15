@@ -1,0 +1,141 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   muse_rx
+## Author       :   Bradley Atkins
+## Description  :   Monitor in_buffer for complete msgs and mv
+##                  to pending directory
+## Date         :   05/04/2014
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+cleanup()
+{
+    echo "${M_RX_STOPPED}" > "${CTL_FILE}"
+}
+
+trap cleanup SIGINT SIGTERM SIGHUP EXIT
+
+##############################################################
+##
+## Name         :   error_exit
+## Author       :   Bradley Atkins
+## Description  :   Write an error msg to the log and exit. As
+##                  this is a standalone script then the function
+##                  m_create_listeners in comm.funcs tests for
+##                  a change of status to LISTENING and calls m_fail
+## Date         :   20/10/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+error_exit()
+{
+    log_line "${1}" "ERROR"
+    exit 1
+} 
+##############################################################
+##
+## Name         :   log_line
+## Author       :   Bradley Atkins
+## Description  :   Write a line to the log
+## Date         :   01/12/2013
+## Args         :   1 - Line
+##                  2 - Status INFO / WARNING / ERROR
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+log_line()
+{
+    echo "$(date): ${2}: RX - ${1}" >> "${LOG}"
+}
+
+#======================================
+# START
+#======================================
+LOG=/tmp/muse_listener_error_log
+MSG_ID=0
+
+#======================================
+# Setup and validation
+#======================================
+[[ -w "${1}" ]] || error_exit "Args. [1] Writable tmp file expected." "ERROR"
+[[ -w "${2}" ]] || error_exit "Args. [2] Writable log file expected." "ERROR"
+[[ -r "${3}" ]] || error_exit "Args. [3] Readable env file expected." "ERROR"
+[[ -r "${4}" ]] || error_exit "Args. [4] Readable control file expected"
+[[ -n "${5}" ]] || error_exit "Args. [5] Path for control file expected"
+[[ (${6} == "DEBUG") || (${6} == "NORMAL") ]] || error_exit "Args. [6] Log level (${6}) not recognised"
+
+
+#======================================
+# Valid so set our vars from the args passed
+#======================================
+TMPFILE="${1}" 	        ## Tmp File
+LOG="${2}"              ## Error log
+ENV="${3}"              ## Environment file
+CTL_FILE=${4}           ## Listener control file
+CONTROL="${5}"          ## Path to M_CONTROL
+LOG_LEVEL="${6}"        ## Log level 
+
+source "${ENV}" || error_exit "Failed to source environemnt"
+
+[[ ${LOG_LEVEL} == "DEBUG" ]] && log_line "TMPFILE = ${TMPFILE}" "INFO"
+[[ ${LOG_LEVEL} == "DEBUG" ]] && log_line "LOG = ${LOG}" "INFO"
+[[ ${LOG_LEVEL} == "DEBUG" ]] && log_line "ENV = ${ENV}" "INFO"
+[[ ${LOG_LEVEL} == "DEBUG" ]] && log_line "CTL_FILE = ${CTL_FILE}" "INFO"
+[[ ${LOG_LEVEL} == "DEBUG" ]] && log_line "CONTROL = ${CONTROL}" "INFO"
+[[ ${LOG_LEVEL} == "DEBUG" ]] && log_line "LOG_LEVEL = ${LOG_LEVEL}" "INFO"
+[[ ${LOG_LEVEL} == "DEBUG" ]] && log_line "Arg validation passed for listener. Listening" "INFO"
+
+#======================================
+# Test we can write to the ctl directories
+#======================================
+touch "${M_MSG_IN_BUFFER}/testfile" || error_exit "Write to (${M_MSG_IN_BUFFER}) failed" "ERROR"
+rm -f "${M_MSG_IN_BUFFER}/testfile" || error_exit "Failed to delete test file in dir (${M_MSG_IN_BUFFER})" "ERROR"
+touch "${M_MSG_IN_PENDING}/testfile" || error_exit "Write to ${M_MSG_IN_BUFFER} failed" "ERROR"
+rm -f "${M_MSG_IN_PENDING}/testfile" || error_exit "Failed to delete test file in dir (${M_MSG_IN_PENDING})" "ERROR"
+
+#======================================
+# Signal we are ready
+#======================================
+echo "${M_RX_READY}" > "${CTL_FILE}"
+
+#======================================
+# Enter the listening loop
+#======================================
+while :
+do
+    #======================================
+    # Check the control file for exit
+    #======================================
+    [[ -f "${CTL_FILE}" ]] || error_exit "Control file not found (${CTL_FILE}). Exiting" "ERROR"
+    if grep "${M_RX_EXIT}" "${CTL_FILE}" >/dev/null 2>&1
+    then
+        log_line "Exit command found in CTL file (${CTL_FILE}). Stopping RX" "INFO"
+        exit 0
+    fi
+
+    #======================================
+    # Scan in_buffer for complete msg files
+    #======================================
+    if ls "${M_MSG_IN_BUFFER}/"*.${M_MSG_OK} >/dev/null 2>&1
+    then
+        SMP=$(head -n 1 < <(ls "${M_MSG_IN_BUFFER}/"*.${M_MSG_OK}))
+        MSG=$(echo ${SMP} | awk '{print $NF}' FS="/")
+        MSG=${MSG%.*}
+        [[ -r "${M_MSG_IN_BUFFER}/${MSG}" ]] || error_exit "Semaphore (${SMP}) without file found. MSG service inconsistent. Exiting" "ERROR"
+
+        #======================================
+        # Complete transission found so move it
+        #======================================
+        mv "${M_MSG_IN_BUFFER}/${MSG}" "${M_MSG_IN_PENDING}"
+        mv "${SMP}" "${M_MSG_IN_PENDING}"
+    fi
+    
+    sleep 1
+
+done
+

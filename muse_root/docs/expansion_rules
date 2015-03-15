@@ -1,0 +1,82 @@
+
+
+file1 contents
+M_RUN_HOST="cds01o"
+M_RUN_HOST="cds02o"
+M_RUN_HOST="cds03o"
+
+file2 contents
+M_RUN_HOST="cds04o"
+M_RUN_HOST="cds05o"
+M_RUN_HOST="cds06o"
+
+
+Suites =========================================================================================
+
+Single suite on line
+
+ms_x1(-v rh="file1" -v VAR="String")
+    ms_x1(-v M_RUNHOST="cds01o" -v VAR="String")
+    ms_x1(-v M_RUNHOST="cds02o" -v VAR="String")
+    ms_x1(-v M_RUNHOST="cds03o" -v VAR="String")
+
+
+Single suite on line with BG
+
+ms_x1(-v rh="file1" -v VAR="String") BG
+    ms_x1(-v M_RUNHOST="cds01o" -v VAR="String") ms_x1(-v M_RUNHOST="cds02o" -v VAR="String") ms_x1(-v M_RUNHOST="cds03o" -v VAR="String")  BG
+
+Implicit BG suites
+
+ms_x1(-v rh="file1" -v VAR="String") ms_x2(-v rh="file2" -v VAR="String2")
+    ms_x1(-v M_RUNHOST="cds01o" -v VAR="String") ms_x1(-v M_RUNHOST="cds02o" -v VAR="String") ms_x1(-v M_RUNHOST="cds03o" -v VAR="String") ms_x2(-v M_RUNHOST="cds04o" -v VAR="String2") ms_x2(-v M_RUNHOST="cds05o" -v VAR="String2")  ms_x2(-v M_RUNHOST="cds06o" -v VAR="String2")
+
+Plugins =======================================================================================
+
+Same rules as above
+
+============================== Test Cases =====================================================
+CMD LINE suite
+muse 'ms_x1(-v rh="file1" -v VAR="String")' 
+muse 'ms_x1(-v rh="file1" -v VAR="String") BG'
+muse 'ms_x1(-v rh="file1" -v VAR="String") BG WAIT'
+
+
+IN SUITES
+ms_x1(-v rh="file1" -v VAR="String")
+ms_x1(-v rh="file1" -v VAR="String") BG
+ms_x1(-v rh="file1" -v VAR="String") ms_x2(-v rh="file2" -v VAR="String2")
+ms_x1(-v rh="file1" -v VAR="String") ms_x2(-v rh="file2" -v VAR="String2") WAIT
+ms_x1(-v rh="file1" -v VAR="String") ms_x2(-v rh="file2" -v VAR="String2") BG
+ms_x1(-v rh="file1" -v VAR="String") ms_x2(-v rh="file2" -v VAR="String2") BG WAIT
+
+
+m_plugin_1 ms_x1(-v rh="file1" -v VAR="String")
+m_plugin_1(-v VAR="StringP1") ms_x1(-v rh="file1" -v VAR="String")
+m_plugin_1(-v VAR1="StringP1" -v VAR2="String"P2") ms_x1(-v rh="file1" -v VAR="String") BG
+m_plugin_1(-v VAR1="StringP1" -v VAR2="String"P2") ms_x1(-v rh="file1" -v VAR="String") m_plugin_2(-v VAR3="String3") WAIT BG
+m_plugin_1(-v rh="file2" -v VAR1="StringP1" -v VAR2="String"P2") ms_x1(-v rh="file1" -v VAR="String") m_plugin_2(-v VAR3="String3") BG WAIT
+m_plugin_1(-v VAR1="StringP1" -v VAR2="String"P2") ms_x1(-v rh="file1" -v VAR="String") m_plugin_2(-v rh="file1" -v VAR3="String3") WAIT
+
+
+Suites within suites
+TC1
+ms_tc1_l1(-v rh="file1" -v VAR="String_l1") 
+    ms_tc1_l2(-v VAR="String_l2)
+        m_tc1_pl1(-v VAR="String_l3")
+RES
+ms_tc1_l1(-v M_RUN_HOST="cdx01o" -v VAR="String_l1") 
+ms_tc1_l1(-v M_RUN_HOST="cdx02o" -v VAR="String_l1") 
+ms_tc1_l1(-v M_RUN_HOST="cdx03o" -v VAR="String_l1")
+
+
+TC2
+ms_tc2_l1(-v rh="file1" -v VAR="String_l1") BG
+    ms_tc2_l2(-v VAR="String_l2)
+        m_tc2_pl1(-v VAR="String_l3")
+RES
+ms_tc2_l1(-v M_RUN_HOST="cdx01o" -v VAR="String_l1") ms_tc2_l1(-v M_RUN_HOST="cdx02o" -v VAR="String_l1") ms_tc2_l1(-v M_RUN_HOST="cdx03o" -v VAR="String_l1")
+
+
+
+

@@ -1,0 +1,79 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   constants.dat
+## Author       :   Bradley Atkins
+## Description  :   Main constants for muse
+## Date         :   25/08/2012
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+##############################################################
+set -a
+    #======================================
+    # Control Constants
+    #======================================
+    C_GREP_PATTERN="error|info|warning"
+    C_LISTENER_TIME_OUT=20
+
+    #======================================
+    # Printing
+    #======================================
+    C_PLUS="                                                  +"
+    C_MINUS="                                                  -"
+    C_USCORE="                                                  _"
+    C_EQUALS="                                                  ="
+    C_EVIDENCE="                                                  ."
+    C_ERROR="                                                  @"
+
+    C_EVIDENCE_MARKER="."
+    C_ERROR_MARKER="@"
+    C_EXCLUSION_MARKER="="
+    C_GREP_EVIDENCE="                                                  [.]+"
+    C_GREP_ERROR="                                                  [@]+"
+
+    C_BREAK="===================================================================================="
+    H_BREAK="____________________________________________________________________________________"
+    E_BREAK="||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||"
+
+    #======================================
+    # Timer constants
+    #======================================
+    C_TIMER_ID=1
+    C_TIMER_IS_SET=2
+    C_TIMER_TIME=3
+    C_TIMER_ACTION=4
+    C_TIMER_ACTION_STATE=5
+    C_TIMER_PAYLOAD=6
+
+    #======================================
+    # Colour constants
+    #======================================
+    C_BLACK='\e[0;30m'
+    C_BLUE='\e[0;34m'
+    C_LIGHT_BLUE='\e[1;34m'
+    C_GREEN='\e[0;32m'
+    C_LIGHT_GREEN='\e[1;32m'
+    C_CYAN='\e[0;36m'
+    C_LIGHT_CYAN='\e[1;36m'
+    C_RED='\e[0;31m'
+    C_LIGHT_RED='\e[1;31m'
+    C_PURPLE='\e[0;35m'
+    C_LIGHT_PURPLE='\e[1;35m'
+    C_BROWN_ORANGE='\e[0;33m'
+    C_YELLOW='\e[1;33m'
+    C_LIGHT_GRAY='\e[0;37m'
+    C_DARK_GRAY='\e[1;37m'
+    C_WHITE='\e[1;37m'
+    C_CLEAR='\e[0m'
+
+    #======================================
+    # Print constants
+    #======================================
+    M_STATUS_OFFSET=20
+    M_JOB_LINE_WIDTH=68
+
+set +a
+return 0

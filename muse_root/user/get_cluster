@@ -1,0 +1,34 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   get_cluster
+## Author       :   Bradley Atkins
+## Description  :   Get the cluster hosting the master
+##
+## Date         :   24/08/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+fail()
+{
+    echo ${1}
+    exit 1
+}
+
+#======================================
+# Websense Specific Fix for Cluster
+#======================================
+wget -q -O /tmp/cluster_defines http://packages.odd.blackspider.com/cgi-bin/whoami.cgi
+[[ -f /tmp/cluster_defines ]] || fail "Error: Failed to recover CLUSTER_DEFINES from packages (get_cluster)"
+
+MSC=$(egrep ^portal_FQDN /tmp/cluster_defines | cut -d"=" -f2)
+[[ -n ${MSC} ]] || fail "Error: cluster_FQDN not found in cluster defines (get_cluster)"
+
+if ! nslookup $(echo ${MSC} | cut -d"=" -f2) > /dev/null 2>&1
+then
+    fail "Error: Failed to resolve cluster name (${MSC}) (get_cluster)"
+fi
+
+echo "${MSC}"

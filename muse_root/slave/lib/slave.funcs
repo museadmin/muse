@@ -1,0 +1,263 @@
+##############################################################
+##
+## Name         :   slave.funcs
+## Author       :   Bradley Atkins
+## Description  :   Common functions for slave handling
+## Date         :   20/07/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+##############################################################
+##
+## Name         :   m_init
+## Author       :   Bradley Atkins
+## Description  :   Set up our runtime env
+## Date         :   22/07/2012
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_init()
+{
+    [[ $# -eq 0 ]] || m_fail 2 "Error: Usage args (${FUNCNAME})"
+    local TMP= GC=
+
+    #======================================
+    # Check our exported variables
+    #======================================
+    [[ -n ${M_SYS_TAG} ]] || m_fail 2 "Error: Sys tag not set (${FUNCNAME})"
+    [[ -n ${M_USR_TAG} ]] || m_fail 2 "Error: Usr tag not set (${FUNCNAME})"
+    [[ -n ${M_RUN_ROOT} ]] || m_fail 2 "Error: Run root not set (${FUNCNAME})"
+
+    if ! which ${M_SQLITE} >/dev/null 2>&1
+    then
+        m_fail 2 "Error: sqlite (${M_SQLITE}) not found on server(${FUNCNAME})"
+    fi
+
+    #======================================
+    # Create the run directories
+    #======================================
+    eval M_CNXN_PATH=~${M_SLAVE_USR}/.ssh/slave
+    mkdir -p "${M_RUN_ROOT}"
+    [[ -d "${M_RUN_ROOT}" ]] || m_fail 2 "Error: Failed to create run time root dir (${FUNCNAME}"
+    mkdir -p "${M_RUN_ROOT}/m_system"
+    [[ -d "${M_RUN_ROOT}/m_system" ]] || m_fail 2 "Error: Failed to create run time system dir (${FUNCNAME}"
+    mkdir -p "${M_NEWEXP}"
+    [[ -d "${M_NEWEXP}" ]] || m_fail 2 "Error: Failed to create run time exp dir (${FUNCNAME}"
+    mkdir -p "${M_TMP}"
+    [[ -d "${M_TMP}" ]] || m_fail 2 "Error: Failed to create run time tmp dir (${FUNCNAME}"
+    mkdir -p "${M_CONTROL}"
+    [[ -d "${M_CONTROL}" ]] || m_fail 2 "Error: Failed to create run time control dir (${FUNCNAME}"
+    mkdir -p "${M_RESULTS}"
+    [[ -d "${M_RESULTS}" ]] || m_fail 2 "Error: Failed to create run time results dir (${FUNCNAME}"
+    mkdir -p "${M_EXEC}"
+    [[ -d "${M_EXEC}" ]] || m_fail 2 "Error: iFailed to create exec directory (${FUNCNAME})"
+
+    [[ -d "${M_DEV_ROOT}" ]] || m_fail 2 "Error: Failed to find development directory ("${M_DEV_ROOT}") (${FUNCNAME})" 
+    
+    mkdir -p "${M_MSG_IN_BUFFER}"
+    [[ -d "${M_MSG_IN_BUFFER}" ]] || m_fail 2 "Error: Failed to create msg in buffer dir (${FUNCNAME})"
+    mkdir -p "${M_MSG_IN_PENDING}"
+    [[ -d "${M_MSG_IN_PENDING}" ]] || m_fail 2 "Error: Failed to create msg in pending dir (${FUNCNAME})"
+    mkdir -p "${M_MSG_IN_PROCESSED}"
+    [[ -d "${M_MSG_IN_PROCESSED}" ]] || m_fail 2 "Error: Failed to create msg in processed dir (${FUNCNAME})"
+
+    mkdir -p "${M_MSG_OUT_BUFFER}"
+    [[ -d "${M_MSG_OUT_BUFFER}" ]] || m_fail 2 "Error: Failed to create msg out buffer dir (${FUNCNAME})"
+    mkdir -p "${M_MSG_OUT_PENDING}"
+    [[ -d "${M_MSG_OUT_PENDING}" ]] || m_fail 2 "Error: Failed to create msg out pending dir (${FUNCNAME})"
+    mkdir -p "${M_MSG_OUT_PROCESSED}"
+    [[ -d "${M_MSG_OUT_PROCESSED}" ]] || m_fail 2 "Error: Failed to create msg out processed dir (${FUNCNAME})"
+    mkdir -p "${M_CONTROL}/${M_FILE_EXCHANGE}"
+    [[ -d "${M_CONTROL}/${M_FILE_EXCHANGE}" ]] || m_fail 2 "Error: Failed to create file exchange (${FUNCNAME})"
+
+    mkdir "${M_PLUGIN_CTL}" || m_fail 2 "Error: Failed to create dir 1 (${FUNCNAME})" 
+    mkdir "${M_PLUGIN_BIN}" || m_fail 2 "Error: Failed to create dir 2 (${FUNCNAME})" 
+    mkdir "${M_PLUGIN_INB}" || m_fail 2 "Error: Failed to create dir 3 (${FUNCNAME})" 
+    mkdir "${M_PLUGIN_INP}" || m_fail 2 "Error: Failed to create dir 4 (${FUNCNAME})" 
+    mkdir "${M_PLUGIN_INC}" || m_fail 2 "Error: Failed to create dir 5 (${FUNCNAME})" 
+    mkdir "${M_PLUGIN_OUTB}" || m_fail 2 "Error: Failed to create dir 6 (${FUNCNAME})" 
+    mkdir "${M_PLUGIN_OUTP}" || m_fail 2 "Error: Failed to create dir 7 (${FUNCNAME})" 
+    mkdir "${M_PLUGIN_OUTC}" || m_fail 2 "Error: Failed to create dir 8 (${FUNCNAME})" 
+    
+    #======================================
+    # Setup the db
+    #======================================
+    m_find_file ${M_SLAVE_DB} TMP
+    cp "${TMP}" "${M_DB_FILE}" || m_fail 2 "Error: Failed to copy master db file (${FUNCNAME})" 
+    chmod +rw "${M_DB_FILE}" || m_fail 2 "Error: chmod failed for ("${M_DB_FILE}") (${FUNCNAME})" 
+    M_DB="$(which ${M_SQLITE}) ${M_DB_FILE} "
+    M_DB_LOCK="${M_TMP}/sqlite.flock"
+    M_DB_ERROR="${M_TMP}/sqlite.error"
+
+    #======================================
+    # Check we can access the msgs table
+    # by way of a smoke test
+    #======================================
+    if ! m_check_table_exists msgs
+    then
+        m_fail 2 "Error: Unable to access msgs table in master db (${M_DB}) (${FUNCNAME})" 
+    fi
+
+    [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Slave db created successfully. (${M_DB_FILE})" "INFO"
+} 
+
+##############################################################
+##
+## Name         :   m_fail
+## Author       :   Bradley Atkins
+## Description  :   Handle errors for the Slave
+## Date         :   20/06/2014
+## Args         :   1 - Error level
+##                  2 - Error msg
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_fail()
+{
+    case ${1} in
+        1)  ## Tell the master but carry on
+            m_write_action "ACT" "HANDLE_NON_FATAL_ERROR"
+            m_set_action_payload "${2}" "HANDLE_NON_FATAL_ERROR"
+            m_log_msg "${2}. Error level (${1})" "ERROR"
+        ;;
+        2)  ## Tell the master and exit
+            m_write_action "ACT" "HANDLE_FATAL_ERROR"
+            m_set_action_payload "${2}" "HANDLE_FATAL_ERROR"
+            m_log_msg "${2}. Error level (${1})" "ERROR"
+#            exit 1
+        ;;
+        *)  ## Error internal to slave. SM can't be trusted so bale out
+            m_log_msg "${2}. Error level (${1})" "ERROR"
+            exit 1
+        ;;
+    esac 
+}
+
+##############################################################
+##
+## Name         :   m_set_plugin_environment
+## Author       :   Bradley Atkins
+## Description  :   Source the runtime libraries and export
+##                  any environment variables etc for the 
+##                  plugin about to run.
+## Date         :   22/06/2014
+## Args         :   1 - FQN of plugin
+##                  2 - exec id of plugin
+##                  3 - Var to hold FQN of modified plugin
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_set_plugin_environment()
+{
+    [[ $# -eq 3 ]] || m_fail 2 "Error: Usage. Args. Count 3 expected. (${FUNCNAME})" 
+    [[ -r "${1}" ]] || m_fail 2 "Error: Usage. Args [1]. Readable plugin file expected. (${FUNCNAME})" 
+    [[ ${2} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Usage Args[2] Integer expected (${FUNCNAME})" 
+    [[ ${3} =~ ^[A-Z0-9_]+$ ]] || m_fail 2 "Error: Usage. Args [3]. MUSE variable expected. (${FUNCNAME})" 
+
+    local NAME= VALUE= LINE= SE= PF= CD= EF= CF= PLF= TMPFILE1= TMPFILE2= TMPFILE3= PNAME="${M_PLUGIN_BIN}/${2}_$(basename "${1}")" P=
+    m_get_tmp_file ${FUNCNAME}_1 TMPFILE1
+    m_get_tmp_file ${FUNCNAME}_2 TMPFILE2
+    m_get_tmp_file ${FUNCNAME}_3 TMPFILE3
+
+    #======================================
+    # Clean the plugin and then update
+    #======================================
+    m_clean_file "${1}" "${TMPFILE1}"
+
+    #======================================
+    # Make this an executable shell
+    #======================================
+    echo "#! /bin/bash" > "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})" 
+    echo "set -e" >> "${TMPFILE2}" >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+
+    #======================================
+    # Always add these values to all plugins
+    #======================================
+    echo "export M_MUSE_MAP=\"${M_MUSE_MAP}\"" >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+    m_find_file m_exec_failure EF
+    echo "export M_EXEC_FAILURE=\"${EF}\"" >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+    echo "export M_LOG=\"${M_LOG}\"" >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+    echo 'export PLUGIN_CTL="'${M_PLUGIN_CTL}'/'${2}'_$(basename '${1}').ctl"' >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+    echo 'export M_USR_TAG="'${M_USR_TAG}'"' >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+    echo 'export M_SYS_TAG="'${M_SYS_TAG}'"' >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+
+    #======================================
+    # Add in any runtime variables
+    #======================================
+    m_select_records "select name, value from var_map as vm join var_scope as vs on vm.var_scope_id = vs.var_scope_id where vm.exec_id = ${2} order by vm.var_scope_id;" "${TMPFILE3}"
+    while read LINE
+    do
+        NAME=$(echo ${LINE} | cut -d"|" -f 1)
+        [[ ${NAME} == M_RUN_HOST ]] && continue
+        VALUE=$(echo ${LINE} | cut -d"|" -f 2)
+        echo "export ${NAME}=${VALUE}" >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+    done < "${TMPFILE3}"
+
+    #======================================
+    # Libraries needed by plugins
+    #======================================
+    ## Slave env file
+    m_find_file slave.env SE
+    echo "source \"${SE}\"" >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+    ## Plugin specific functions
+    m_find_file plugin.funcs PLF
+    echo "source \"${PLF}\"" >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+    ## Print functions
+    m_find_file print.funcs PF
+    echo "source \"${PF}\"" >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+    ## Constants
+    m_find_file constants.dat CD
+    echo "source \"${CD}\"" >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+    ## Common functions
+    m_find_file common.funcs CF
+    echo "source \"${CF}\"" >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+    ## Muse mapper
+    echo "source \"${M_MAPPER}\"" >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+
+    #======================================
+    # Add in any project level libs and envs
+    #======================================
+    PLIST=$(find "${M_PROJECTS}" -maxdepth 1 -mindepth 1 | tr "\n" " " 2>/dev/null)
+    for P in ${PLIST}
+    do
+        if [[ -r "${P}/environment/$(basename ${P}).env" ]]
+        then
+            echo 'source "'${P}'/environment/'$(basename ${P})'.env"' >> "${TMPFILE2}"
+        fi
+        if [[ -r "${P}/lib/$(basename ${P}).funcs" ]]
+        then
+            echo 'source "'${P}'/lib/'$(basename ${P})'.funcs"' >> "${TMPFILE2}"
+        fi
+    done
+    
+    echo "set +e" >> "${TMPFILE2}"
+
+    #======================================
+    # Echo running msg to ctl as 1st cmd
+    #======================================
+    echo 'echo "running" > "${PLUGIN_CTL}"' >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+
+    #======================================
+    # Now add on the plugin code
+    #======================================
+    cat "${TMPFILE1}" >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+
+    #======================================
+    # Echo completed msg to ctl file as last line
+    #======================================
+    echo 'echo "finished" > "${PLUGIN_CTL}"' >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+    
+    #======================================
+    # Return path to cleaned plugin
+    #======================================
+    mv "${TMPFILE2}" "${PNAME}" || m_fail 2 "Error: Move failed (${FUNCNAME})"
+    eval ${3}="${PNAME}"
+}
+

@@ -1,0 +1,26 @@
+##############################################################
+##
+## Name		:	ms_test
+## Author	:	Bradley Atkins
+## Description	:	Demo suite showing groups / BG jobs
+##			and error levels
+## Date		:	16/09/2012
+## Args		:	
+## Status	:	Reviewed 	[n]
+##			Tested 		[n]
+##			Released 	[n]
+##
+##
+##############################################################
+
+BG m_forced_error
+
+m_grep_ssh m_time
+
+BG m_fatal_error
+
+m_hostname WAIT m_ifconfig
+
+m_ifconfig2
+
+m_user

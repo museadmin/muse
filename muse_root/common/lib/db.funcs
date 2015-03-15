@@ -1,0 +1,2991 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   db.funcs
+## Author       :   Bradley Atkins
+## Description  :   MAin db functions for MUSE. As the SM is
+##                  completely dependant on the db for control
+##                  any defect in here is catastrophic. Hence
+##                  all error traps pass EC of 13
+## Date         :   09/12/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+##############################################################
+##
+## Name         :   m_select_host_data
+## Author       :   Bradley Atkins
+## Description  :   Select the required host data from the M_DB
+##                  Assumes you want this from the current cluster.
+##                  Override M_CLUSTER in call to change cluster.
+##                  Return value can be multi line
+##                  Returns empty string for no record.
+## Date         :   13/08/2013
+## Args         :   1 - data item. Quote $1 for multiple fields. e.g.
+##                      "sname, os"
+##                  2 - predicate
+##                  3 - where pattern
+##                  4 - Name of variable to return results in
+## Status       :   Reviewed    [n]
+##                  Tested      [y]
+##                  Released    [n]
+##############################################################
+m_select_host_data()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 4 ]] || m_fail 13 "Error: Args 4 expected (${FUNCNAME})"
+	local TMPFILE1= TO=${M_DB_RETRY}
+	m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+    A1=$1
+    A2=$2
+    A3=$3
+    A4=$4
+    M_CLUSTER=$M_CLUSTER
+    
+    #======================================
+    # Query the database
+    #======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>/dev/null <<-EOF
+			select $1 from muse_hosts where $2 = '$3' and cluster_fqdn = '${M_CLUSTER}';
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: select failed (${FUNCNAME})"
+
+    #======================================
+    # Assign results to variable passed in $4
+    #======================================
+    if [[ -s ${TMPFILE1} ]] 
+	then
+		eval $4='$(echo $(cat ${TMPFILE1} | tr "\n" " "))'
+	else
+		eval $4=
+	fi
+}
+
+
+#======================================
+# Database Validation functions
+#======================================
+
+##############################################################
+##
+## Name         :   m_check_table_exists
+## Author       :   Bradley Atkins
+## Description  :   Confirm a table exists in the MUSE ctl db
+## Date         :   14/08/2013
+## Args         :   1 - Table Name
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_check_table_exists()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 1 ]] || m_fail 13 "Error: Args 1 expected (${FUNCNAME})"
+	[[ -f "${M_DB_FILE}" ]] || m_fail 13 "Error: Master database not found (${FUNCNAME})" 
+	[[ -n "${M_DB}" ]] || m_fail 13 "Error: M_DB not set. (${FUNCNAME})" 
+	local EC=1 TMPFILE1= TO=${M_DB_RETRY}
+	m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+	#======================================
+    # query the database for table name
+    #======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} >"${TMPFILE1}" 2>/dev/null <<-EOF
+			select name from sqlite_master where type = 'table' and name = '${1}';
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert timed out (${FUNCNAME})"
+
+    #======================================
+    # Return true or false
+    #======================================
+    ## TODO This probably passes because name exists in error msg
+    if grep ${1} "${TMPFILE1}" >/dev/null 2>&1 
+    then
+        EC=0
+    fi
+    return ${EC}
+}
+# TODO unit tests
+
+##############################################################
+##
+## Name         :   m_confirm_db_available
+## Author       :   Bradley Atkins
+## Description  :   Check if the MUSE master DB is accessible
+## Date         :   15/08/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_confirm_db_available()
+{
+    if m_check_table_exists msgs
+    then
+        return 0
+    else
+        return 1
+    fi
+}
+# TODO unit tests
+
+#======================================
+# Messaging functions
+#======================================
+##############################################################
+##
+## Name         :   m_get_action_from_msg
+## Author       :   Bradley Atkins
+## Description  :   Retrieve the action from a msg.
+##                  Confirm action is valid
+## Date         :   14/04/2014
+## Args         :   1 - MSG ID
+##                  2 - VAR to return action in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_action_from_msg()
+{
+    #======================================
+    # Validation and setup
+    #======================================
+    [[ $# -eq 2 ]] || m_fail 13 "Error: Usage. Args. 2 expected (${FUNCNAME})" 
+    [[ $1 =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage. Args [1]. Integer expected. (${FUNCNAME})" 
+    [[ $2 =~ ^[A-Z_0-9]+$ ]] || m_fail 13 "Error: Usage. Args [2] MUSE variable name expected. (${FUNCNAME})" 
+
+	local TMPFILE1= TMPFILE2= TO=${M_DB_RETRY} FLAG= PAYLOAD=
+    m_get_tmp_file ${FUNCNAME}_1 TMPFILE1
+    m_get_tmp_file ${FUNCNAME}_2 TMPFILE2
+
+	#======================================
+	# Get the flag and payload
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+		while ! ${M_DB} > "${TMPFILE1}" 2>/dev/null <<-EOF
+			select action_flag from msgs where msgs_id = '${1}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select 1 timed out (${FUNCNAME})"
+
+	FLAG=$(head -n 1 "${TMPFILE1}")
+
+	#======================================
+	# Is the flag known?
+	#======================================
+	TO=${M_DB_RETRY}
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+		while ! ${M_DB} > "${TMPFILE2}" 2>/dev/null <<-EOF
+			select flag from state_machine where flag = '${FLAG}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select 2 timed out (${FUNCNAME})"
+
+	[[ $(head -n 1 "${TMPFILE2}") == ${FLAG} ]] || m_fail 13 "Error: Unrecognised flag found in msg. ID = (${1}). Flag = (${FLAG}) (${FUNCNAME})" 
+
+    #======================================
+    # Return the action flag
+    #======================================
+	eval ${2}='${FLAG}'
+}
+
+
+##############################################################
+##
+## Name         :   m_set_action_payload
+## Author       :   Bradley Atkins
+## Description  :   Update the payload for an action record
+## Date         :   20/04/2014
+## Args         :   1 - Payload
+##                  2 - Action flag
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_set_action_payload()
+{
+    [[ $# = 2 ]] || m_fail 13 "Error: Usage. Args. 2 expected (${FUNCNAME})" 
+    [[ -n ${1} ]] || m_fail 13 "Error: Usage. Args [1]. Payload expected. (${FUNCNAME})" 
+    [[ ${2} =~ ^[A-Z_0-9]+$ ]] || m_fail 13 "Error: Usage. Args [2]. Action expected. (${FUNCNAME})" 
+    
+	local TMPFILE1= 
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    #======================================
+    # Write the payload to the state_machine 
+    # table
+    #======================================
+	TO=${M_DB_RETRY}
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+		while ! ${M_DB} > "${TMPFILE1}" 2>/dev/null <<-EOF
+			update state_machine set payload = '${1}' where flag = '${2}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Update timed out (${FUNCNAME})"
+}
+
+##############################################################
+##
+## Name         :   m_set_action_msg_id
+## Author       :   Bradley Atkins
+## Description  :   Update the msg_id for an action record
+## Date         :   31/05/2014
+## Args         :   1 - msg_id
+##                  2 - Action flag
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_set_action_msg_id()
+{
+    [[ $# = 2 ]] || m_fail 13 "Error: Usage. Args. 2 expected (${FUNCNAME})" 
+    [[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage. Args [1]. Integer msg id expected. (${FUNCNAME})" 
+    [[ ${2} =~ ^[A-Z_0-9]+$ ]] || m_fail 13 "Error: Usage. Args [2]. Action expected. (${FUNCNAME})" 
+    
+	local TMPFILE1= 
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    #======================================
+    # Write the payload to the state_machine 
+    # table
+    #======================================
+	TO=${M_DB_RETRY}
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+		while ! ${M_DB} > "${TMPFILE1}" 2>/dev/null <<-EOF
+			update state_machine set msg_id = '${1}' where flag = '${2}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Update timed out (${FUNCNAME})"
+}
+
+
+##############################################################
+##
+## Name         :   m_update_ack_ctl_table
+## Author       :   Bradley Atkins
+## Description  :   Update a col in the timer table 
+## Date         :   31/05/2014
+## Args         :   1 - Column
+##					2 - Value
+##					3 - Where clause
+##					4 - Where predicate
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_update_ack_ctl_table()
+{
+    [[ $# -eq 4 ]] || m_fail 13 "Error: Usage. Args. 4 expected (${FUNCNAME})" 
+	[[ -n ${1} ]] || m_fail 13 "Error: Usage. Args [1]. Column name expected (${FUNCNAME})" 
+	[[ -n ${2} ]] || m_fail 13 "Error: Usgae. Args [2]. Value expected (${FUNCNAME})" 
+	[[ -n ${3} ]] || m_fail 13 "Error: Usage. Args [3]. Where clause expected (${FUNCNAME})" 
+	[[ -n ${4} ]] || m_fail 13 "Error: Usage. Args [4]. Where predicate expected (${FUNCNAME})" 
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+	
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				update ack_ctl set '${1}' = '${2}' where ${3} = '${4}'; 
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Update timed out (${FUNCNAME})"
+
+}
+
+##############################################################
+##
+## Name         :   m_set_ack
+## Author       :   Bradley Atkins
+## Description  :   Schedule an ACK
+## Date         :   31/05/2014
+## Args         :   1 - msgs_id
+##                  2 - Epoch milliseconds
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_set_ack()
+{
+	#======================================
+	# Validate and setup
+	#======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Args 2 Expected. (${FUNCNAME})"
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Args [1] (${1}); Integer expected. (${FUNCNAME})"
+	[[ ${2} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Args [2] (${2}); Integer expected. (${FUNCNAME})" 
+
+	local TO=${M_DB_RETRY}
+
+	#======================================
+	# Insert the record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} >/dev/null 2>&1 <<-EOF
+			insert into ack_ctl
+				(msgs_id, sent)
+			values
+				('${1}', '${2}');
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert timed out (${FUNCNAME})"
+}
+
+##############################################################
+##
+## Name         :   m_get_ack_q
+## Author       :   Bradley Atkins
+## Description  :   Return ID's of all ack_ctl records with
+##                  'sent' = 0
+##                  Returns empty string for no record
+## Date         :   31/05/2014
+## Args         :   1 - Name of variable for result
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_ack_q()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 1 ]] || m_fail 13 "Error: Args 1 expected (${FUNCNAME})"
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+	[[ ${1} =~ ^[A-Z_]+$ ]] || m_fail 13 "Error: Args [1] Variable name format. (${FUNCNAME})" 
+
+	#======================================
+    # query the database for NEW msgs
+    #======================================
+	(
+		:>"${M_DB_ERROR}"
+        :>"${TMPFILE1}"
+
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>/dev/null <<-EOF
+			select msgs_id from ack_ctl where sent = '0';
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed (${FUNCNAME})"
+
+    #======================================
+    # Assign results to variable passed in $1
+    #======================================
+    eval ${1}="${TMPFILE1}"
+}
+
+##############################################################
+##
+## Name         :   m_get_msg_q
+## Author       :   Bradley Atkins
+## Description  :   Return ID's of all msgs unprocessed and
+##                  order by priority.
+##                  Returns empty string for no record, otherwise
+##                  the msgs_id of the next msg in q
+## Date         :   14/08/2013
+## Args         :   1 - Name of variable to assign results to
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_msg_q()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 1 ]] || m_fail 13 "Error: Args 1 expected (${FUNCNAME})"
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+	[[ ${1} =~ ^[A-Z_]+$ ]] || m_fail 13 "Error: Args [1] Variable name format. (${FUNCNAME})" 
+
+	#======================================
+    # query the database for NEW msgs
+    #======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>/dev/null <<-EOF
+			select msgs_id from msgs where status = 'NEW' and direction = 'INBOUND' order by priority asc;
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed (${FUNCNAME})"
+
+    #======================================
+    # Assign results to variable passed in $1
+    #======================================
+    if [[ -s ${TMPFILE1} ]] 
+	then
+		eval $1='$(head -n 1 "${TMPFILE1}")'
+	else
+		eval $1=""
+	fi
+}
+
+##############################################################
+##
+## Name         :   m_update_msgs_table
+## Author       :   Bradley Atkins
+## Description  :   Update a col in the msgs table 
+## Date         :   20/04/2014
+## Args         :   1 - Column
+##					2 - Value
+##					3 - Where clause
+##					4 - Where predicate
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_update_msgs_table()
+{
+    [[ $# -eq 4 ]] || m_fail 13 "Error: Usage. Args. 4 expected (${FUNCNAME})" 
+	[[ -n ${1} ]] || m_fail 13 "Error: Usage. Args [1]. Column name expected (${FUNCNAME})" 
+	[[ -n ${2} ]] || m_fail 13 "Error: Usgae. Args [2]. Value expected (${FUNCNAME})" 
+	[[ -n ${3} ]] || m_fail 13 "Error: Usage. Args [3]. Where clause expected (${FUNCNAME})" 
+	[[ -n ${4} ]] || m_fail 13 "Error: Usage. Args [4]. Where predicate expected (${FUNCNAME})" 
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+	
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				update msgs set '${1}' = '${2}' where ${3} = '${4}'; 
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Update timed out (${FUNCNAME})"
+
+}
+##############################################################
+##
+## Name         :   m_get_msg
+## Author       :   Bradley Atkins
+## Description  :   Return msg that matches msgs_id
+##                  order by priority.
+##                  Returns empty string for no record.
+## Date         :   14/08/2013
+## Args         :   1 - id of msg
+##					2 - Name of variable to assign result to
+##                  3 - Direction
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_msg()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 3 ]] || m_fail 13 "Error: Args 3 expected. (${FUNCNAME})"
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Args [1] Integer expected. (${FUNCNAME})" 
+	[[ ${2} =~ ^[A-Z_]+$ ]] || m_fail 13 "Error: Args [2] Variable name format. (${FUNCNAME})" 
+    [[ (${3} == "INBOUND") || (${3} == "OUTBOUND") ]] || m_fail 13 "Error: Usage. Args. [3] Direction expected. (${FUNCNAME})" 
+
+	#======================================
+    # query the database for msg with id
+    #======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+			select * from msgs where msgs_id = ${1} and direction = '${3}';
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert timed out (${FUNCNAME})"
+    
+    #======================================
+    # Assign results to variable passed in $1
+    #======================================
+    if [[ -s ${TMPFILE1} ]] 
+	then
+		eval $2='$(head -n 1 ${TMPFILE1})'
+	else
+		eval $2=""
+	fi
+}
+# TODO unit tests
+
+##############################################################
+##
+## Name         :   m_set_msg
+## Author       :   Bradley Atkins
+## Description  :   Add a msg to the database
+## Date         :   17/08/2013
+## Args         :   1 - sender_id (msgs_id from sender msg table)
+##					2 - tx_time (Time stamp from inbound message)
+##                  3 - thread_id (MSG thread this msg belongs to)
+##                  4 - priority (1 - High, 2 - Medium, 3 - Low)
+##                  5 - sender (hostname of sender)
+##                  6 - recipient (hostname)
+##                  7 - action_flag (Corresponds to Action for SM)
+##                  8 - payload (Any metadata required by the action)
+##                  9 - direction (INBOUND or OUTBOUND)
+##                  10- status (NEW, PROCESSED, TIMEOUT)
+##                  11- session_id (Global session ID set by master)
+##					12- Var to return ID in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_set_msg()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+    [[ $# -eq 12 ]] || m_fail 13 "Error: Args count. 12 Expected (${FUNCNAME})"
+	
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage args [1]. Integer expected. (${FUNCNAME})"
+	[[ -n ${2} ]] || m_fail 13 "Error: Usage args [2] Time stamp expected. (${FUNCNAME})"
+	[[ ${3} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage args [3] integer expected. (${FUNCNAME})"
+	[[ (${4} -eq 1) || (${4} -eq 2) || (${4} -eq 3) ]] || m_fail 13 "Error: Usage args [4] Priority out of range (${1}). 1 - 3 expected.(${FUNCNAME})"
+	[[ -n ${5} ]] || m_fail 13 "Error: Usage args [5] Sender expected. (${FUNCNAME})"
+	[[ -n ${6} ]] || m_fail 13 "Error: Usage args [6] Recipient expected. (${FUNCNAME})"
+	[[ ${7} =~ ^[A-Z0-9_]+$ ]] || m_fail 13 "Error:  Usage args. [7] Action Expected. (${FUNCNAME})"
+	[[ -n ${8} ]] || m_fail 13 "Error: Usage args [8] payload expected. (${FUNCNAME})"
+	[[ (${9} == "INBOUND") || (${9} == "OUTBOUND") ]] || m_fail 13 "Error:  Usage args. [9] Direction expected. (${FUNCNAME})"
+	[[ (${10} == "NEW") || (${10} == "PROCESSED") || (${10} == "TIMEOUT") ]] || m_fail 13 "Error:  Usage args. [10] Status expected. (${FUNCNAME})"
+	[[ -n ${11} ]] || m_fail 13 "Error: Usage args. [11] Session ID expected (${FUNCNAME})" 
+    [[ -n ${12} ]] || m_fail 13 "Error: MUSE Variable name expected. (${FUNCNAME})" 
+
+    [[ -w "${M_DB_FILE}" ]] || m_fail 13 "Error: Control DB not found. (${FUNCNAME})"
+
+	local HOST= TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+	#======================================
+	# Insert the record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				insert into msgs 
+					(sender_id, tx_time, thread_id, priority, sender, recipient, action_flag, payload, direction, status, session_id) 
+				values 
+					('${1}', '${2}', '${3}', '${4}', '${5}', '${6}', '${7}', '${8}', '${9}', '${10}', '${11}');
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert timed out (${FUNCNAME})"
+
+	TO=${M_DB_RETRY}
+
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select msgs_id from msgs order by msgs_id desc limit 1;
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert timed out (${FUNCNAME})"
+
+	#======================================
+	# Return the ID of the record we have just inserted
+	#======================================
+	TMP=$(head -n 1 ${TMPFILE1})
+	[[ ${TMP} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Record id (${TMP}) failed validation. (${FUNCNAME})" 
+	eval ${12}=${TMP}
+} 
+
+##############################################################
+##
+## Name         :   m_get_payload_from_msg
+## Author       :   Bradley Atkins
+## Description  :   Get teh payload from a msg
+## Date         :   26/05/2014
+## Args         :   1 - MSG id
+##                  2 - Return VAR 
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_payload_from_msg()
+{
+
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Usage. arg count. 2 expected. (${FUNCNAME})"
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage. args [1]. integer expected. (${FUNCNAME})" 
+	[[ ${2} =~ ^[A-Z_0-9]+$ ]] || m_fail 13 "Error: Args [2] (${2}) Variable name format. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    :>"${TMPFILE1}"
+    :>"${M_DB_ERROR}"
+
+	#======================================
+	# Select the data
+	#======================================
+	(
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select payload from msgs where msgs_id = '${1}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+	eval ${2}='$(head -n 1 "${TMPFILE1}")'
+} 
+
+##############################################################
+##
+## Name         :   m_get_thread_id_from_msg
+## Author       :   Bradley Atkins
+## Description  :   Get the thread_id from a msg
+## Date         :   21/09/2014
+## Args         :   1 - MSG id
+##                  2 - Return VAR 
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_thread_id_from_msg()
+{
+
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Usage. arg count. 2 expected. (${FUNCNAME})"
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage. args [1]. integer expected. (${FUNCNAME})" 
+	[[ ${2} =~ ^[A-Z_0-9]+$ ]] || m_fail 13 "Error: Args [2] (${2}) Variable name format. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    :>"${TMPFILE1}"
+    :>"${M_DB_ERROR}"
+
+	#======================================
+	# Select the data
+	#======================================
+	(
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select thread_id from msgs where msgs_id = '${1}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+	eval ${2}=$(head -n 1 "${TMPFILE1}")
+} 
+#======================================
+# Timing Functions
+#======================================
+
+##############################################################
+##
+## Name         :   m_set_alarm
+## Author       :   Bradley Atkins
+## Description  :   Create an alarm and set it running
+## Date         :   14/08/2013
+## Args         :   1 - Time (integer. Either sec or msec)
+##					2 - Failure level (1 or 2)
+##					3 - Failure MSG
+##					4 - Period - S or MS
+##					5 - Note. Comment on what alarm is for (debug)
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_set_alarm()
+{
+	#======================================
+	# Validate and setup
+	#======================================
+	[[ $# -eq 5 ]] || m_fail 13 "Error: Args 5 Expected. (${FUNCNAME})"
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Args [1] (${1}); Integer expected. (${FUNCNAME})" ## Time
+	[[ (${2} -eq 1) || (${2} -eq 2) ]] || m_fail 13 "Error: Args [2] (${2}); 1 or 2 expected. (${FUNCNAME})" 
+	[[ -n ${3} ]] || m_fail 13 "Error: Args [3] Error msg is empty string. (${FUNCNAME})" 
+	[[ (${4} == S) || (${4} == MS) ]] || m_fail 13 "Error: Args [4] (${4}); S or MS expected. (${FUNCNAME})" 
+	[[ -n ${5} ]] || m_fail 13 "Error: Args [5] Explanatory note expected. (${FUNCNAME})" 
+
+	local TO=${M_DB_RETRY}
+
+	#======================================
+	# Insert the record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} >/dev/null 2>&1 <<-EOF
+			insert into alarm 
+				(time, alarm_failure_level, alarm_failure_msg, period, note)
+			values
+				(${1}, ${2}, '${3}', '${4}', '${5}');
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert timed out (${FUNCNAME})"
+}
+
+
+
+##############################################################
+##
+## Name         :   m_update_timer_table
+## Author       :   Bradley Atkins
+## Description  :   Update a col in the timer table 
+## Date         :   20/04/2014
+## Args         :   1 - Column
+##					2 - Value
+##					3 - Where clause
+##					4 - Where predicate
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_update_timer_table()
+{
+    [[ $# -eq 4 ]] || m_fail 13 "Error: Usage. Args. 4 expected (${FUNCNAME})" 
+	[[ -n ${1} ]] || m_fail 13 "Error: Usage. Args [1]. Column name expected (${FUNCNAME})" 
+	[[ -n ${2} ]] || m_fail 13 "Error: Usgae. Args [2]. Value expected (${FUNCNAME})" 
+	[[ -n ${3} ]] || m_fail 13 "Error: Usage. Args [3]. Where clause expected (${FUNCNAME})" 
+	[[ -n ${4} ]] || m_fail 13 "Error: Usage. Args [4]. Where predicate expected (${FUNCNAME})" 
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+	
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				update timer set '${1}' = '${2}' where ${3} = '${4}'; 
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Update timed out (${FUNCNAME})"
+
+}
+
+##############################################################
+##
+## Name         :   m_get_expired_timers
+## Author       :   Bradley Atkins
+## Description  :   Return the expired timers
+##                  
+## Date         :   07/12/2013
+##                  1 - Return VAR
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_expired_timers()
+{
+	#======================================
+	# Setup and validation
+    #======================================
+	[[ ${1} =~ ^[A-Z0-9_]*$ ]] || m_fail 13 "Error: Usage. Args [1]. MUSE variable name expected. . (${FUNCNAME})" 
+	
+	local TMPFILE1= TO=${M_DB_RETRY} CT
+	m_get_epoch_milliseconds CT
+	m_get_tmp_file ${FUNCNAME} TMPFILE1
+	
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>/dev/null <<-EOF
+			select * from timer where is_set = 0 and time < ${CT};
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select timed out (${FUNCNAME})"
+	
+	#======================================
+	# Return any matching records
+	#======================================
+	if [[ -s ${TMPFILE1} ]] 
+	then
+		eval ${1}=${TMPFILE1}
+	else
+		eval ${1}=""
+	fi
+}
+##############################################################
+##
+## Name         :   m_set_timer
+## Author       :   Bradley Atkins
+## Description  :   Enable or disable a flag after a time period
+## Date         :   15/08/2013
+## Args         :   1 - Time in milli seconds
+##                  2 - Payload
+##                  3 - Action
+##                  4 - Action state. ACT or SKIP
+## Status       :   Reviewed    [n]
+##                  Tested      [y]
+##                  Released    [n]
+##############################################################
+m_set_timer()
+{
+	#======================================
+	# Validate and setup
+	#======================================
+	[[ $# -eq 4 ]] || m_fail 13 "Error: Args 4 Expected. (${FUNCNAME})"
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Args [1] Integer expected. (${FUNCNAME})" 
+    [[ -n ${2} ]] || m_fail 13 "Error: Usage. Args [2]. Empty string unexpected (${FUNCNAME})" 
+    [[ ${3} =~ ^[A-Z0-9_]*$ ]] || m_fail 13 "Error: Action (${3}) failed validation. (${FUNCNAME})" 
+	[[ ${4} =~ ^ACT$|^SKIP$ ]] || m_fail 13 "Error: Usage Unrecognised action (${4}). ACT or SKIP expected. (${FUNCNAME})" 
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+    #======================================
+    # Confirm the action exists
+    #======================================
+    [[ ${3} =~ ^[A-Z_]*$ ]] || m_fail 13 "Error: Action flag format (${FUNCNAME})" 
+	
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>/dev/null <<-EOF
+			select state_machine_id from state_machine where flag = '${3}';
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select timed out (${FUNCNAME})"
+    
+	
+	[[ $(head -n 1 "${TMPFILE1}") =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Failed to validate flag (${3}) against known flags. (${FUNCNAME})"
+
+	#======================================
+	# Insert the record
+	#======================================
+	TO=${M_DB_RETRY}
+    (
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} >/dev/null 2>&1 <<-EOF
+			insert into timer 
+				(is_set, time, payload , action, action_state)
+			values
+				('0', '${1}', '${2}', '${3}', '${4}');
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select timed out (${FUNCNAME})"
+}
+## TODO Unit tests
+
+#======================================
+# Action flag functions
+#======================================
+
+##############################################################
+##
+## Name         :   m_set_action
+## Author       :   Bradley Atkins
+## Description  :   Set a state machine flag to either ACT or SKIP
+## Date         :   18/08/2013
+## Args         :   1 - Flag
+##                  2 - Action
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_set_action()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Args 2 expected. (${FUNCNAME})"
+    [[ ${1} =~ ^[0-9A-Z_]+$  ]] || m_fail 13 "Error: Args [1] (${1}) Flag format validation failed. (${FUNCNAME})" 
+	[[ ${2} =~ ^ACT$|^SKIP$ ]] || m_fail 13 "Error: Args [2] Unrecognised action (${2}). ACT or SKIP expected. (${FUNCNAME})" 
+	
+    local TMPFILE1= VAL= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+    #======================================
+    # Check if this flag exists in the table
+    #======================================
+    m_get_action_from_state_machine "${1}" VAL
+    [[ "${VAL}" =~ ^ACT$|^SKIP$ ]] || m_fail 13 "Error: Action flag (${1}) not recognised in table. (${FUNCNAME})" 
+    
+	#======================================
+	# Update the record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} >"${TMPFILE1}" 2>&1 <<-EOF
+			update state_machine set
+				action = '${2}' 
+			where
+				flag = '${1}';
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select timed out (${FUNCNAME})"
+}
+
+##############################################################
+##
+## Name         :   m_get_action_from_state_machine
+## Author       :   Bradley Atkins
+## Description  :   Retrieve the action state of the named flag
+##                  Returns empty string for no record.
+## Date         :   18/08/2013
+## Args         :   1 - Flag
+##					2 - Name of variable to return action in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_action_from_state_machine()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Args 2 expected. (${FUNCNAME})"
+    [[ ${1} =~ ^[0-9A-Z_]+$  ]] || m_fail 13 "Error: Args [1] (${1}) Action flag format validation failed. (${FUNCNAME})" 
+    [[ ${2} =~ ^[0-9A-Z_]+$  ]] || m_fail 13 "Error: Args [2] (${2}) MUSE Var name expected. (${FUNCNAME})" 
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+	#======================================
+	# Retrieve the record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+			select action from 
+				state_machine
+			where
+				flag = '${1}';
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed (${FUNCNAME})"
+    
+	#======================================
+    # Assign action to variable passed in $2
+    #======================================
+	eval ${2}=$(head -n 1 ${TMPFILE1})
+}
+
+##############################################################
+##
+## Name         :   m_get_payload_from_state_machine
+## Author       :   Bradley Atkins
+## Description  :   Retrieve the payload for the named flag
+##                  Returns empty string for no record.
+## Date         :   18/08/2013
+## Args         :   1 - Action
+##					2 - Name of variable to return action in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_payload_from_state_machine()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Args 2 expected. (${FUNCNAME})"
+    [[ ${1} =~ ^[0-9A-Z_]+$  ]] || m_fail 13 "Error: Args [1] (${1}) Action flag format validation failed. (${FUNCNAME})" 
+    [[ ${2} =~ ^[0-9A-Z_]+$  ]] || m_fail 13 "Error: Args [2] (${2}) MUSE Var name expected. (${FUNCNAME})" 
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+	#======================================
+	# Retrieve the record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+			select payload from 
+				state_machine
+			where
+				flag = '${1}';
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select timed out (${FUNCNAME})"
+    
+	#======================================
+    # Assign payload to variable passed in $2
+    #======================================
+	eval ${2}='$(head -n 1 ${TMPFILE1})'
+}
+
+##############################################################
+##
+## Name         :   m_get_msg_id_from_state_machine
+## Author       :   Bradley Atkins
+## Description  :   Retrieve the msg_id for the named flag
+##                  Returns empty string for no record.
+## Date         :   31/05/2014
+## Args         :   1 - Action
+##					2 - Name of variable to return action in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_msg_id_from_state_machine()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Args 2 expected. (${FUNCNAME})"
+    [[ ${1} =~ ^[0-9A-Z_]+$  ]] || m_fail 13 "Error: Args [1] (${1}) Action flag format validation failed. (${FUNCNAME})" 
+    [[ ${2} =~ ^[0-9A-Z_]+$  ]] || m_fail 13 "Error: Args [2] (${2}) MUSE Var name expected. (${FUNCNAME})" 
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+	#======================================
+	# Retrieve the record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+			select msg_id from 
+				state_machine
+			where
+				flag = '${1}';
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select timed out (${FUNCNAME})"
+    
+	#======================================
+    # Assign payload to variable passed in $2
+    #======================================
+	eval ${2}='$(head -n 1 ${TMPFILE1})'
+}
+
+#======================================
+# State functions
+#======================================
+
+##############################################################
+##
+## Name         :   m_set_state
+## Author       :   Bradley Atkins
+## Description  :   Record a particular state of the state_machine
+## Date         :   18/08/2013
+## Args         :   1 - State. Textual state string
+##					2 - Status. 0 false, 1 true
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_set_state()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Args 2 Expected. (${FUNCNAME})"
+	[[ ${1} =~ ^[A-Z_]+$ ]] || m_fail 13 "Error: Args [1] (${1}) State name format. (${FUNCNAME})" 
+    [[ (${2} -eq 0) || (${2} -eq 1) ]] || m_fail 13 "Error: Args [2] (${2}) Status out of range. 0 or 1 expected.(${FUNCNAME})" 
+
+    local TMPFILE1= VAR= TO=${M_DB_RETRY} 
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+    #======================================
+    # Check this state exists prior update
+    #======================================
+    m_get_state "${1}" VAR
+    [[ -n ${VAR} ]] || m_fail 13 "Error: State (${1}) not found in table. (${FUNCNAME})" 
+	#======================================
+	# Update the record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				update state set
+					status = '${2}', change = '$(($(date +%s%N)/1000000))'
+				where
+					state_txt = '${1}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Update timed out (${FUNCNAME})"
+} 
+
+##############################################################
+##
+## Name         :   m_get_state
+## Author       :   Bradley Atkins
+## Description  :   Retrieve the state of a particular machine state
+##                  Returns empty string for no record.
+## Date         :   18/08/2013
+## Args         :   1 - State. Textual string 
+##					2 - Variable to return state into
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_state()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Args 2 expected. (${FUNCNAME})"
+	[[ ${1} =~ ^[A-Z_]+$ ]] || m_fail 13 "Error: Args [1] (${1}) State name format. (${FUNCNAME})"
+	[[ ${2} =~ ^[A-Z_]+$ ]] || m_fail 13 "Error: Args [2] (${2}) Variable name format. (${FUNCNAME})"
+	
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    
+	#======================================
+	# Retrieve the record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select status from 
+					state
+				where
+					state_txt = '${1}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert timed out (${FUNCNAME})"
+	
+	#======================================
+    # Assign state to variable passed in $2
+    #======================================
+	eval $2='$(head -n 1 ${TMPFILE1})'
+} 
+
+
+##############################################################
+##
+## Name         :   m_delete_thread_exec
+## Author       :   Bradley Atkins
+## Description  :   Delete a record in thread_exec table
+## Date         :   10/05/2014
+## Args         :   1 - id
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_delete_thread_exec()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+	#======================================
+	# Select the data
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				delete from thread_exec where exec_id = '${1}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+}
+
+##############################################################
+##
+## Name         :   m_insert_thread_exec
+## Author       :   Bradley Atkins
+## Description  :   Insert new record into thread_exec table
+## Date         :   10/05/2014
+## Args         :   1 - id
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_insert_thread_exec()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+	#======================================
+	# Select the data
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				insert into thread_exec (exec_id) values ('${1}');
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert failed ($(cat "${TMPFILE1}")) (${FUNCNAME})"
+}
+
+##############################################################
+##
+## Name         :   m_create_exec_record
+## Author       :   Bradley Atkins
+## Description  :   Create a provisional record with defaults
+## Date         :   19/08/2013
+## Args         :   1 - Parent ID
+##                  2 - Variable to return id in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_create_exec_record()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Usage args. 2 expected. (${FUNCNAME})"
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Args [1] Integer expected. (${FUNCNAME})"
+	[[ ${2} =~ ^[A-Z_0-9]+$ ]] || m_fail 13 "Error: Args [2] (${2}) Variable name format. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    
+	#======================================
+	# Create the new task record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				insert into exec
+					(parent_id)
+				values
+					(${1});
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+    #======================================
+    # Retrieve the id for new record
+    #======================================
+	TO=${M_DB_RETRY}
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select id from exec order by id desc limit 1;
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+    #======================================
+    # Assign id to variable passed in $1
+    #======================================
+	eval ${2}='$(head -n 1 ${TMPFILE1})'
+}
+# TODO unit tests
+
+##############################################################
+##
+## Name         :   m_update_exec_data
+## Author       :   Bradley Atkins
+## Description  :   Update a suite or plugin record
+## Date         :   18/08/2013
+## Args         :   1 - ID
+##                  2 - column
+##                  3 - data
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_update_exec_data()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 3 ]] || m_fail 13 "Error: Usage args 3 expected. (${FUNCNAME})"
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage args [1] Integer expected. (${FUNCNAME})"
+	[[ ${2} =~ ^[a-z_]+$ ]] || m_fail 13 "Error: Usgae args [2] (${2}) column name format. (${FUNCNAME})"
+	[[ -n ${3} ]] || m_fail 13 "Error: Usage args [3] (${3}) data expected.(${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    
+	#======================================
+	# Update the record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				update exec set
+					${2} = '${3}'
+				where
+					id = '${1}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Update failed ($(cat "${TMPFILE1}")) (${FUNCNAME})"
+}
+
+##############################################################
+##
+## Name         :   m_get_exec_data
+## Author       :   Bradley Atkins
+## Description  :   Retrieve column/s of data for
+##                  the given suite or plugin
+##                  Returns empty string for no record.
+## Date         :   18/08/2013
+## Args         :   1 - Suite ID
+##                  2 - Column name
+##                  3 - Variable to contain field
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_exec_data()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 3 ]] || m_fail 13 "Error: Usage args. 3 expected (${FUNCNAME})"
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage args [1] Integer expected. (${FUNCNAME})"
+	[[ ${2} =~ ^[_a-z]+$ ]] || m_fail 13 "Error: Usage args [2] (${2}) column name format. (${FUNCNAME})"
+	[[ ${3} =~ ^[A-Z_]+$ ]] || m_fail 13 "Error: Usage args [3] (${3}) Variable name format. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    
+    #======================================
+    # Retrieve the column data
+    #======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select ${2} from exec where id = '${1}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+    #======================================
+    # Assign data to variable passed in $3
+    #======================================
+	eval ${3}=$(head -n 1 "${TMPFILE1}")
+}
+
+##############################################################
+##
+## Name         :   m_get_exec_state
+## Author       :   Bradley Atkins
+## Description  :   Return exec_id for every receord in exec 
+##                  table with given state 0 | 1 | 2
+## Date         :   15/11/2014
+## Args         :   1 - State
+##                  2 - Filename to return values in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_exec_state()
+{
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage args [1] Integer expected. (${FUNCNAME})"
+    [[ -w ${2} ]] || m_fail 13 "Error: Usage args [2] (${2}) Writable file expected. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    
+    #======================================
+    # Retrieve the column data
+    #======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select id from exec where state = '${1}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+    #======================================
+    # Assign data to file passed in $2
+    #======================================
+	mv "${TMPFILE1}" "${2}"
+}
+##############################################################
+##
+## Name         :   m_get_next_exec_id
+## Author       :   Bradley Atkins
+## Description  :   Return the next exec id number available.
+## Date         :   16/11/2014
+## Args         :   1 - Var name to return value in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_next_exec_id()
+{
+	[[ ${1} =~ ^[A-Z_]+$ ]] || m_fail 13 "Error: Usage args [1] (${1}) Variable name format. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY} VAL=
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    
+    #======================================
+    # Retrieve the column data
+    #======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select max(id) from exec;
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+    #======================================
+    # Return the incremented value
+    #======================================
+    VAL=$(head -n 1 "${TMPFILE1}")
+    [[ ${VAL} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Integer expected. (${FUNCNAME})" 
+	eval ${1}=$(( VAL + 1 ))
+}
+##############################################################
+##
+## Name         :   m_get_next_exec_order
+## Author       :   Bradley Atkins
+## Description  :   Return the next exec_order number available.
+## Date         :   15/11/2014
+## Args         :   1 - Var name to return value in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_next_exec_order()
+{
+	[[ ${1} =~ ^[A-Z_]+$ ]] || m_fail 13 "Error: Usage args [1] (${1}) Variable name format. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY} VAL=
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    
+    #======================================
+    # Retrieve the column data
+    #======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select max(exec_order) from exec where exec_type = 'plugin';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+    #======================================
+    # Return the incremented value
+    #======================================
+    VAL=$(head -n 1 "${TMPFILE1}")
+    [[ ${VAL} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Integer expected. (${FUNCNAME})" 
+	eval ${1}=$(( VAL + 1 ))
+}
+##############################################################
+##
+## Name         :   m_get_next_grp_id
+## Author       :   Bradley Atkins
+## Description  :   Get the next available group id for a 
+##                  new group
+## Date         :   15/11/2014
+## Args         :   1 - Var to return index
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_next_grp_id()
+{
+	[[ ${1} =~ ^[A-Z_]+$ ]] || m_fail 13 "Error: Usage args [1] (${1}) Variable name format. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    
+    #======================================
+    # Retrieve the column data
+    #======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select max(group_id) from exec;
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+    #======================================
+    # Return the incremented value
+    #======================================
+    VAL=$(head -n 1 "${TMPFILE1}")
+    [[ ${VAL} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Integer expected. (${FUNCNAME})" 
+	eval ${1}=$(( VAL + 1 ))
+}
+
+##############################################################
+##
+## Name         :   m_get_siblings_on_line
+## Author       :   Bradley Atkins
+## Description  :   Return the id of every sibling on a suite line
+##                  executing commands.
+##                  1 - Suite id
+##                  2 - exec line
+##                  3 - VAR to hold path to results file
+## Date         :   11/05/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_siblings_on_line()
+{
+    [[ $# -eq 3 ]] || m_fail 13 "Error: Usage. arg count. 3 expected. (${FUNCNAME})"
+    [[ ${1} =~ ^[A-Z_0-9]+$ ]] || m_fail 13 "Error: Args [1] (${1}) Variable name format. (${FUNCNAME})"
+    [[ ${2} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage args [2]. Integer expected. (${FUNCNAME})"
+    [[ ${3} =~ ^[A-Z_0-9]+$ ]] || m_fail 13 "Error: Args [3] (${3}) Variable name format. (${FUNCNAME})"
+    local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select id from exec where parent_id = '${1}' and line_no = '${2}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+    
+    eval ${3}="${TMPFILE1}"
+}
+
+##############################################################
+##
+## Name         :   m_get_executing_suites
+## Author       :   Bradley Atkins
+## Description  :   Return the id of every suite currently 
+##                  executing commands.
+##                  1 - VAR to hold path to results file
+## Date         :   11/05/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_executing_suites()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 1 ]] || m_fail 13 "Error: Usage args. 1 expected (${FUNCNAME})"
+	[[ ${1} =~ ^[A-Z_]+$ ]] || m_fail 13 "Error: Usage args [1] (${1}) Variable name format. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    
+    #======================================
+    # Retrieve the column data
+    #======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select id from exec where exec_line > 0;
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+    #======================================
+    # Assign results file name to $1
+    #======================================
+	eval ${1}="${TMPFILE1}"
+}
+##############################################################
+##
+## Name         :   m_update_slave_register
+## Author       :   Bradley Atkins
+## Description  :   Update a col in the slave_register table 
+## Date         :   16/04/2014
+## Args         :   1 - Column
+##					2 - Value
+##					3 - Where clause
+##					4 - Where predicate
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_update_slave_register()
+{
+    [[ $# -eq 4 ]] || m_fail 13 "Error: Usage. Args. 4 expected (${FUNCNAME})" 
+	[[ -n ${1} ]] || m_fail 13 "Error: Usage. Args [1]. Column name expected (${FUNCNAME})" 
+	[[ -n ${2} ]] || m_fail 13 "Error: Usgae. Args [2]. Value expected (${FUNCNAME})" 
+	[[ -n ${3} ]] || m_fail 13 "Error: Usage. Args [3]. Where clause expected (${FUNCNAME})" 
+	[[ -n ${4} ]] || m_fail 13 "Error: Usage. Args [4]. Where predicate expected (${FUNCNAME})" 
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+	
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				update slave_register set '${1}' = '${2}' where ${3} = '${4}'; 
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 3 "Error: Update failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+}
+
+##############################################################
+##
+## Name         :   m_insert_into_slave_register
+## Author       :   Bradley Atkins
+## Description  :   Update the slave_register table with a
+##                  slave's cnxn details
+## Date         :   16/04/2014
+## Args         :   1 - Slave hostname
+##					2 - Slave's msg in buffer
+##					3 - Connection socket
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_insert_into_slave_register()
+{
+    [[ $# -eq 3 ]] || m_fail 13 "Error: Usage. Args. 3 expected (${FUNCNAME})" 
+	[[ -n ${1} ]] || m_fail 13 "Error: Usage. Args [1]. Slave hostname expected (${FUNCNAME})" 
+	[[ -n ${2} ]] || m_fail 13 "Error: Usgae. Args [2]. Path to in buffer expected (${FUNCNAME})" 
+	[[ -n ${3} ]] || m_fail 13 "Error: Usage. Args [3]. Domain socket expected (${FUNCNAME})" 
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+	
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				insert into slave_register 
+					(slave, in_buffer, cnxn) 
+				values 
+					('${1}','${2}','${3}');
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Update failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+}
+##############################################################
+##
+## Name         :   m_select_slave_data
+## Author       :   Bradley Atkins
+## Description  :   Select a column from the slave_register
+## Date         :   22/04/2014
+## Args         :   1 - column name
+##                  2 - where clause
+##                  3 - where predicate
+##                  4 - VAR to return value
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_select_slave_data()
+{
+
+    [[ $# -eq 4 ]] || m_fail 13 "Error: Usage. Args. 4 expected (${FUNCNAME})" 
+	[[ -n ${1} ]] || m_fail 13 "Error: Usage. Args [1]. Column name  expected (${FUNCNAME})" 
+	[[ -n ${2} ]] || m_fail 13 "Error: Usgae. Args [2]. Where clause expected (${FUNCNAME})" 
+	[[ -n ${3} ]] || m_fail 13 "Error: Usage. Args [3]. Where predicate expected (${FUNCNAME})" 
+	[[ ${4} =~ ^[A-Z0-9_]+$ ]] || m_fail 13 "Error: Usage. Args. [4] MUSE varaiable name expected (${FUNCNAME})" 
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+	
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select ${1} from slave_register where ${2} = '${3}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Update failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+	eval ${4}=$(head -n 1 "${TMPFILE1}")
+}
+
+#======================================
+# COMMS Functions
+#======================================
+
+##############################################################
+##
+## Name         :   m_add_new_tx_record
+## Author       :   Bradley Atkins
+## Description  :   Add a new control record for the msg tx
+## Date         :   25/12/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_add_new_tx_record()
+{
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+	
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				insert into txer (pid) values (0);
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+}
+
+##############################################################
+##
+## Name         :   m_update_txer_table
+## Author       :   Bradley Atkins
+## Description  :   Update our record in the txer table. Always
+##					takes last record in case we are in recovery
+##					mode
+## Date         :   25/12/2013
+## Args         :   1 - column name
+##					2 - value
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_update_txer_table()
+{
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Usage args. Count - 2 expected (${FUNCNAME})" 
+	[[ ${1} =~ ^[a-z_]+$ ]] || m_fail 13 "Error: Usage args [1]. Column name (${1}) validation failed (${FUNCNAME})" 
+	[[ -n ${2} ]] || m_fail 13 "Error: Usage args [2]. Non null value (${FUNCNAME})" 
+
+    local TO=${M_DB_RETRY} EC=0 TMPFILE1
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				update txer set ${1} = '${2}' where txer_id = (select txer_id from txer order by txer_id desc limit 1);
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Update failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+}
+
+##############################################################
+##
+## Name         :   m_get_tx_data
+## Author       :   Bradley Atkins
+## Description  :   Retrieve a field from the txer table
+## Date         :   25/12/2013
+## Args         :   1 - column name
+##					2 - Var to return data
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_tx_data()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Usage args - 2 expected. (${FUNCNAME})"
+	[[ ${1} =~ ^[a-z_]+$ ]] || m_fail 13 "Error: Usage args [2] (${1}) Column name format. (${FUNCNAME})"
+	[[ ${2} =~ ^[A-Z_]+$ ]] || m_fail 13 "Error: Usage args [2] (${1}) Column name format. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+	#======================================
+	# Select the data
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select ${1} from txer where txer_id = (select txer_id from txer order by txer_id desc limit 1);
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+	eval ${2}=\"$(head -n 1 "${TMPFILE1}")\"
+}
+
+
+##############################################################
+##
+## Name         :   m_add_new_listener_to_db
+## Author       :   Bradley Atkins
+## Description  :   Add a listener to the rxer table
+## Date         :   19/10/2013
+## Args         :   1 - Path to listener
+##                  2 - Name of variable to return record ID
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_add_new_listener_to_db()
+{
+    #======================================
+    # Validate and Setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Arg cnt. 2 expected. (${FUNCNAME})"
+	[[ -n ${1} ]] || m_fail 13 "Error: Args. [1] Empty string not expected. (${FUNCNAME})"
+	[[ ${2} =~ ^[A-Z_0-9]+$ ]] || m_fail 13 "Error: Args [2] (${2}) Variable name format. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    
+	#======================================
+    # Insert the record
+    #======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				insert into rxer (fqn) values ('${1}');
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+	TO=${M_DB_RETRY}
+	
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select listener_id from rxer where fqn = '${1}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+	eval ${2}=$(head -n 1 "${TMPFILE1}")
+}
+##############################################################
+##
+## Name         :   m_update_listener_table
+## Author       :   Bradley Atkins
+## Description  :   Update a column in the listener table
+## Date         :   20/10/2013
+## Args         :   1 - column name
+##                  2 - data
+##					3 - listener id
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_update_listener_table()
+{
+    #======================================
+    # Validate and Setup
+    #======================================
+	[[ $# -eq 3 ]] || m_fail 13 "Error: Usage. Arg cnt. 3 expected. (${FUNCNAME})"
+	[[ -n ${1} ]] || m_fail 13 "Error: Usage. Args [1] Empty string not expected. (${FUNCNAME})"
+	[[ -n ${2} ]] || m_fail 13 "Error: Usage. Args [2] Empty string not expected. (${FUNCNAME})"
+	[[ ${3} =~ ^[[:digit:]]$ ]] || m_fail 13 "Error: Usage. Args. [3] integer expected. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+	
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				update rxer set ${1} = '${2}' where listener_id = ${3};
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Update failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+}
+##############################################################
+##
+## Name         :   m_get_listener_data
+## Author       :   Bradley Atkins
+## Description  :   Retrieve a field from a listener table column
+## Date         :   23/12/2013
+## Args         :   1 - listener_id
+##					2 - Column name
+##					3 - Var to return data
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_listener_data()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 3 ]] || m_fail 13 "Error: Usage args 3 expected. (${FUNCNAME})"
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage args [1]. Integer expected. (${FUNCNAME})" 
+	[[ ${2} =~ ^[a-z_]+$ ]] || m_fail 13 "Error: Usage args [2] (${1}) Column name format. (${FUNCNAME})"
+	[[ ${3} =~ ^[A-Z_]+$ ]] || m_fail 13 "Error: Usage args [3] (${2}) Variable name format. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+
+	#======================================
+	# Select the data
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select ${2} from rxer where listener_id = ${1};
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+	eval ${3}=$(head -n 1 "${TMPFILE1}")
+}
+
+#======================================
+# Job Functions
+#======================================
+##############################################################
+##
+## Name         :   m_add_new_job_to_db
+## Author       :   Bradley Atkins
+## Description  :   Add a plugin to the job table
+## Date         :   25/05/2014
+## Args         :   1 - Path to job
+##                  2 - Name of variable to return record ID
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_add_new_job_to_db()
+{
+    #======================================
+    # Validate and Setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Arg cnt. 2 expected. (${FUNCNAME})"
+	[[ -f ${1} ]] || m_fail 13 "Error: Args. [1] Path to plugin expected. (${FUNCNAME})"
+	[[ ${2} =~ ^[A-Z_0-9]+$ ]] || m_fail 13 "Error: Args [2] (${2}) Variable name format. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    
+	#======================================
+    # Insert the record
+    #======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				insert into job (fqn) values ('${1}');
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+	TO=${M_DB_RETRY}
+	
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select job_id from job order by job_id desc;
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+	eval ${2}=$(head -n 1 "${TMPFILE1}")
+}
+
+##############################################################
+##
+## Name         :   m_update_job_table
+## Author       :   Bradley Atkins
+## Description  :   Update a plugin record
+## Date         :   25/05/2014
+## Args         :   1 - ID
+##                  2 - column
+##                  3 - data
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_update_job_table()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 3 ]] || m_fail 13 "Error: Usage args 3 expected. (${FUNCNAME})"
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage args [1] Integer expected. (${FUNCNAME})"
+	[[ ${2} =~ ^[a-z_]+$ ]] || m_fail 13 "Error: Usgae args [2] (${2}) column name format. (${FUNCNAME})"
+	[[ -n ${3} ]] || m_fail 13 "Error: Usage args [3] (${3}) data expected.(${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    
+	#======================================
+	# Update the record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				update job set
+					${2} = '${3}'
+				where
+					job_id = '${1}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Update failed ($(cat "${TMPFILE1}")) (${FUNCNAME})"
+}
+
+##############################################################
+##
+## Name         :   m_get_job_data
+## Author       :   Bradley Atkins
+## Description  :   Retrieve column/s of data for
+##                  the given suite or plugin
+##                  Returns empty string for no record.
+## Date         :   31/05/2014
+## Args         :   1 - Job ID
+##                  2 - Column name
+##                  3 - Variable to contain field
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_get_job_data()
+{
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 3 ]] || m_fail 13 "Error: Usage args. 3 expected (${FUNCNAME})"
+	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage args [1] Integer expected. (${FUNCNAME})"
+	[[ ${2} =~ ^[_a-z]+$ ]] || m_fail 13 "Error: Usage args [2] (${2}) column name format. (${FUNCNAME})"
+	[[ ${3} =~ ^[A-Z_]+$ ]] || m_fail 13 "Error: Usage args [3] (${3}) Variable name format. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    
+    #======================================
+    # Retrieve the column data
+    #======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				select ${2} from job where job_id = '${1}';
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+    #======================================
+    # Assign data to variable passed in $3
+    #======================================
+	eval ${3}=$(head -n 1 "${TMPFILE1}")
+}
+
+
+
+
+#======================================
+# MISC
+#======================================
+
+##############################################################
+##
+## Name         :   m_select_sl3
+## Author       :   Bradley Atkins
+## Description  :   Run a select statement against the DB
+## Date         :   23/12/2013
+## Args         :   1 - SQL
+##                  2 - Return VAR for path to results
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_select_sl3()
+{
+
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Usage. arg count. 2 expected. (${FUNCNAME})"
+	[[ -n ${1} ]] || m_fail 13 "Error: Usage. args [1]. sql string expected. (${FUNCNAME})" 
+	[[ ${2} =~ ^[A-Z_0-9]+$ ]] || m_fail 13 "Error: Args [2] (${2}) Variable name format. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    :>"${TMPFILE1}"
+
+	#======================================
+	# Select the data
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				${1};
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+	eval ${2}="${TMPFILE1}"
+} 
+##############################################################
+##
+## Name         :   m_select_lines
+## Author       :   Bradley Atkins
+## Description  :   Run a select statement against the DB and
+##                  return results in line mode
+## Date         :   17/11/2014
+## Args         :   1 - SQL
+##                  2 - File for results
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_select_lines()
+{
+
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Usage. arg count. 2 expected. (${FUNCNAME})"
+	[[ -n ${1} ]] || m_fail 13 "Error: Usage. args [1]. sql string expected. (${FUNCNAME})" 
+    [[ -w ${2} ]] || m_fail 13 "Error: Args [2] (${2}) Writable file expected. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    :>"${TMPFILE1}"
+
+	#======================================
+	# Select the data
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				.mode line
+				${1};
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+	eval mv "${TMPFILE1}" "${2}"
+} 
+
+##############################################################
+##
+## Name         :   m_select_records
+## Author       :   Bradley Atkins
+## Description  :   Run a select statement against the DB
+## Date         :   17/11/2014
+## Args         :   1 - SQL
+##                  2 - File for results
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_select_records()
+{
+
+    #======================================
+    # Validate and setup
+    #======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Usage. arg count. 2 expected. (${FUNCNAME})"
+	[[ -n ${1} ]] || m_fail 13 "Error: Usage. args [1]. sql string expected. (${FUNCNAME})" 
+    [[ -w ${2} ]] || m_fail 13 "Error: Args [2] (${2}) Writable file expected. (${FUNCNAME})"
+
+	local TMPFILE1= TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+    :>"${TMPFILE1}"
+
+	#======================================
+	# Select the data
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+				${1};
+			EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Select failed ($(cat "${TMPFILE1}"))${FUNCNAME})"
+
+	eval mv "${TMPFILE1}" "${2}"
+} 
+##############################################################
+##
+## Name         :   m_insert_variable
+## Author       :   Bradley Atkins
+## Description  :   Insert a variable record into var_scope.
+##					Return the ID of the new record.
+## Date         :   12/10/2014
+## Args         :   1 - Variable Name
+##                  2 - VAR for return ID
+##					3 - Variable Value
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_insert_variable()
+{
+	#======================================
+	# Validate and setup
+	#======================================
+	[[ $# -ge 2 ]] || m_fail 13 "Error: Arg count. > 2 Expected. (${FUNCNAME})"
+    [[ -n ${1} ]] || m_fail 13 "Error: Usage. Arg[1]. Name expected (${FUNCNAME})" 
+    [[ ${2} =~ ^[A-Z_0-9]+$ ]] || m_fail 13 "Error: Usage. Args [2] MUSE variable name expected. (${FUNCNAME})" 
+    [[ -n ${3} ]] || m_fail 13 "Error: Usage. Arg[1]. Value expected (${FUNCNAME})" 
+
+	local TO=${M_DB_RETRY}
+    m_get_tmp_file ${FUNCNAME} TMPFILE1
+	
+
+	#======================================
+	# Insert the record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} >/dev/null 2>&1 <<-EOF
+			insert into var_scope
+				(name, value)
+			values
+				('${1}', '${3}');
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert timed out (${FUNCNAME})"
+	
+	#======================================
+	# Get the ID of the new record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} > "${TMPFILE1}" 2>&1 <<-EOF
+			select var_scope_id from var_scope order by var_scope_id desc limit 1;
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: select timed out (${FUNCNAME})"
+	
+	#======================================
+	# Return the ID of the record we have just inserted
+	#======================================
+	TMP=$(head -n 1 "${TMPFILE1}")
+	[[ ${TMP} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Record id (${TMP}) failed validation. (${FUNCNAME})" 
+	eval ${2}=${TMP}
+}
+
+##############################################################
+##
+## Name         :   m_insert_mapping
+## Author       :   Bradley Atkins
+## Description  :   Insert a variable mapping into var_map table
+## Date         :   12/10/2014
+## Args         :   1 - Variable ID from var_scope
+##                  2 - Exec ID for job in exec table
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_insert_mapping()
+{
+	#======================================
+	# Validate and setup
+	#======================================
+	[[ $# -eq 2 ]] || m_fail 13 "Error: Arg count. 2 Expected. (${FUNCNAME})"
+    [[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage. Args [1]. Integer expected. (${FUNCNAME})" 
+    [[ ${2} =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage. Args [1]. Integer expected. (${FUNCNAME})" 
+
+	local TO=${M_DB_RETRY}
+
+	#======================================
+	# Insert the record
+	#======================================
+	(
+		:>"${M_DB_ERROR}"
+		flock 200
+
+		while ! ${M_DB} >/dev/null 2>&1 <<-EOF
+			insert into var_map
+				(var_scope_id, exec_id)
+			values
+				('${1}', '${2}');
+		EOF
+		do
+			if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+		done
+
+	) 200>"${M_DB_LOCK}"
+
+	[[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert timed out (${FUNCNAME})"
+}	
+
+##############################################################
+##
+## Name         :   m_dump_tables
+## Author       :   Bradley Atkins
+## Description  :   Dump tables listed in args
+## Date         :   23/11/2014
+## Args         :   1 - Return var for file name
+##                  2 -> n Table name[s]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_dump_tables()
+{
+    [[ $# -ge 2 ]] || m_fail 13 "Error: Table name[s] expected (${FUNCNAME})" 
+    [[ ${1} =~ ^[A-Z0-9_]+$ ]] || m_fail 13 "Error: Usage. Args [1]. MUSE var expected. (${FUNCNAME})"
+
+	local OF RV=${1}
+	m_get_tmp_file ${FUNCNAME} OF
+	shift
+
+    #======================================
+    # Insert the record
+    #======================================
+    (
+        :>"${M_DB_ERROR}"
+        flock 200
+
+		while ! ${M_DB} >/dev/null 2>&1 <<-EOF
+			.output "${OF}"
+			.dump $*
+		EOF
+        do
+            if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+        done
+
+    ) 200>"${M_DB_LOCK}"
+
+    [[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Insert timed out (${FUNCNAME})"
+
+	eval ${RV}=\"${OF}\"
+}
+##############################################################
+##
+## Name         :   m_import_tables
+## Author       :   Bradley Atkins
+## Description  :   Read in a table dump
+## Date         :   16/12/2014
+## Args         :   1 - Name of file
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_import_tables()
+{
+    [[ $# -eq 1 ]] || m_fail 13 "Error: Usage. Arg count. 1 expected (${FUNCNAME})" 
+    [[ -r ${1} ]] || m_fail 13 "Error: Usage. Args [1]. SQL dump file expected. (${FUNCNAME})"
+
+	local OF 
+	m_get_tmp_file ${FUNCNAME} OF
+
+    #======================================
+    # Insert the record
+    #======================================
+    (
+        :>"${M_DB_ERROR}"
+        flock 200
+
+		while ! ${M_DB} >/dev/null 2>&1 <<-EOF
+			.read "${1}"
+		EOF
+        do
+            if [[ $((TO -=1)) -le 0 ]] 
+            then
+                echo "FAILED" > "${M_DB_ERROR}"
+                break
+            fi
+        done
+
+    ) 200>"${M_DB_LOCK}"
+
+    [[ -s "${M_DB_ERROR}" ]] && m_fail 13 "Error: Import timed out (${FUNCNAME})"
+}

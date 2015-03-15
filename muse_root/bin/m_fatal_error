@@ -1,0 +1,20 @@
+#! /bin/bash
+##############################################################
+##
+## Name		:	m_fatal_error
+## Author	:	Bradley Atkins
+## Description	:	Throw a fatal error
+## Date		:	16/09/2012
+## Status	:	Reviewed 	[n]
+##			Tested 		[n]
+##			Released 	[n]
+##
+## M_JOB_HOST srv-tranq
+## M_GREP_PATTERN "^[[:alnum:]]+: |error|info|warning"
+##
+##############################################################
+SCRIPT_NAME=m_fatal_error
+
+sleep 1
+
+m_fail 2 "Error:Forced Fatal Error - (${SCRIPT_NAME})" 

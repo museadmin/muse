@@ -1,0 +1,8 @@
+#! /bin/bash
+
+PIDS=$(ps -ef | grep muse | grep -v "vim" | grep -v grep | grep -v "kill_muse" | awk '{print $2}' | tr "\n" " " )
+[[ -n ${PIDS} ]] && kill -9 ${PIDS}
+
+rm -rf ~museslave/.ssh/slave_*
+rm -rf ~mailcontrol/.ssh/master_*
+rm -f /tmp/*msg*

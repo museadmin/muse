@@ -1,0 +1,16 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   get_hosts
+## Author       :   Bradley Atkins
+## Description  :   User should add code in here to retrieve
+##                  host information and add it to muse.hosts
+##                  in correct format. MUSE will then load the 
+##                  host data into the master DB.
+## Date         :   14/01/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
