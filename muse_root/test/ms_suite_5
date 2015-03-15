@@ -1,0 +1,14 @@
+##############################################################
+##
+## Name         :   ms_suite_5
+## Author       :   Bradley Atkins
+## Description  :   Dev suite for suite parsing functions.
+##                  Two background plugins and suite
+## Date         :   09/05/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+m_plugin_4 m_plugin_5 ms_suite_1

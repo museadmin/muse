@@ -1,0 +1,14 @@
+##############################################################
+##
+## Name         :   ms_suite_9
+## Author       :   Bradley Atkins
+## Description  :   Dev suite for suite parsing functions
+##                  Trigger infinite recursion
+## Date         :   09/05/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ms_suite_8

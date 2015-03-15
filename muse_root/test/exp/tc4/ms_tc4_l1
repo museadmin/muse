@@ -1,0 +1,14 @@
+##############################################################
+##
+## Name         :   ms_tc4_l1
+## Author       :   Bradley Atkins
+## Description  :   Single suite on line expands to 3 consecutive
+##                  suites because of run host file
+## Date         :   21/02/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ms_tc4_l2(-v VAR="String_l2")

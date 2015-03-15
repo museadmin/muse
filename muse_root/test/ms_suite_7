@@ -1,0 +1,16 @@
+##############################################################
+##
+## Name         :   ms_suite_7
+## Author       :   Bradley Atkins
+## Description  :   Dev suite for suite parsing functions
+##                  Explicit background suite and forground pg
+## Date         :   09/05/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ms_suite_1 BG
+m_plugin_4
+

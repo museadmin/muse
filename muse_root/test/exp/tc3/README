@@ -1,0 +1,97 @@
+#======================================
+# Test suite for suite expansion by 
+# run host entries in an rh= file
+#======================================
+
+Command line:
+muse ms_tc3_l1
+
+Test produces three processed object suites in M_MS_OBJ
+ms_tc1_l1 contains a reference to run host file "file1"
+This host file expands to single M_RUN_HOST entry in suite.
+Plugin m_tc1_pl1 uses M_RUN_HOST as M_JOB_HOST
+
+Test that three hosts in run hosts file are expanded to 3 parallel
+calls to ms_tc2_l2 as original suite had call as FG job
+
+
+Files:
+/tmp/ms_obj/ms_cmd_line
+/tmp/ms_obj/ms_tc3_l1_7215
+/tmp/ms_obj/ms_tc3_l2_12675
+/tmp/ms_obj/ms_tc3_l2_30449
+/tmp/ms_obj/ms_tc3_l2_9370
+
+Content:
+ms_tc3_l1_7215
+
+##############################################################
+##
+## Name         :   ms_tc3_l1_7215
+## Author       :   Bradley Atkins
+## Description  :   Single suite on line expands to 3 parallel
+##                  suites because of run host file and BG
+## Date         :   21/02/2015
+## Args         :
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ ms_tc3_l2_9370( -v M_RUN_HOST="dev01o" -v  VAR="String_l2") ms_tc3_l2_30449( -v M_RUN_HOST="dev01o" -v  VAR="String_l2") ms_tc3_l2_12675( -v M_RUN_HOST="dev01o" -v  VAR="String_l2") BG WAIT
+##############################################################
+##
+## Name         :   ms_tc3_l2_12675
+## Author       :   Bradley Atkins
+## Description  :   Called from ms_tc3_l1
+## Date         :   14/02/2015
+## Args         :
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ m_tc3_pl1(-v VAR="String_l3")
+##############################################################
+##
+## Name         :   ms_tc3_l2_30449
+## Author       :   Bradley Atkins
+## Description  :   Called from ms_tc3_l1
+## Date         :   14/02/2015
+## Args         :
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ m_tc3_pl1(-v VAR="String_l3")
+##############################################################
+##
+## Name         :   ms_tc3_l2_9370
+## Author       :   Bradley Atkins
+## Description  :   Called from ms_tc3_l1
+## Date         :   14/02/2015
+## Args         :
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+ m_tc3_pl1(-v VAR="String_l3")
+
+Master output:
+
+====================================================================================
+ Status             : Commencing MUSE run
+ Start              : Sat Feb 21 12:57:42 GMT 2015
+ Master             : dev01o.30.test.blackspider.com
+ User Tag           : wibble
+ Sys  Tag           : 150221125738
+====================================================================================
+ (1)   12:57:55: - m_tc3_pl1                                                (dev01o)
+ (2)   12:57:56: - m_tc3_pl1                                                (dev01o)
+ (3)   12:57:56: - m_tc3_pl1                                                (dev01o)
+====================================================================================
+ Status             : Clean run. No problems reported.
+ Finish Time        : Sat Feb 21 12:58:12 GMT 2015
+====================================================================================

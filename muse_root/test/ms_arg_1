@@ -1,0 +1,34 @@
+##############################################################
+##
+## Name         :   ms_arg_1
+## Author       :   Bradley Atkins
+## Description  :   Test inheritance and scope of variables
+## Date         :   17/12/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+#======================================
+# Children inherit implicit BG group
+#======================================
+m_arg_1a m_arg_1b
+
+#======================================
+# Children inherit consecutive non group
+#======================================
+m_arg_1a
+m_arg_1b
+
+#======================================
+# Suite inherits implicit BG group
+#======================================
+ms_arg_1a ms_arg_1b
+
+
+#======================================
+# Suite inherits consecutive non group
+#======================================
+ms_arg_1a 
+ms_arg_1b

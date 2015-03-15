@@ -1,0 +1,15 @@
+##############################################################
+##
+## Name         :   ms_suite_2
+## Author       :   Bradley Atkins
+## Description  :   Dev suite for suite parsing functions.
+##                  Two forground plugins
+## Date         :   09/05/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+m_plugin_1
+m_plugin_2

@@ -1,0 +1,23 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   m_arg_2a
+## Author       :   Bradley Atkins
+## Description  :   Confirm two vars are overrriden by plugin
+##                  suite
+## Date         :   17/12/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## M_JOB_HOST
+## M_GREP_PATTERN "^[[:alnum:]]+: |^/.*: |error|info|warning"
+##
+##############################################################
+SCRIPT_NAME=m_arg_2a
+
+echo "MSV1 = ${MSV1}"
+echo "MSV2 = ${MSV2}"
+[[ ${MSV1} == "vor1" ]] || m_fail 2 "MSV1 Failed validation (${SCRIPT_NAME})" 
+[[ ${MSV2} == "vor2" ]] || m_fail 1 "MSV2 Failed validation (${SCRIPT_NAME})" 

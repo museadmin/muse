@@ -1,0 +1,21 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   m_plugin_2
+## Author       :   Bradley Atkins
+## Description  :   Test plugin for parsing functions
+## Date         :   09/05/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## M_JOB_HOST dev01o
+## M_GREP_PATTERN "^[[:alnum:]]+: |^/.*: |error|info|warning"
+##
+##############################################################
+SCRIPT_NAME=m_plugin_2
+
+echo "m_plugin_2"
+echo "M_SUITE_5_V1 = ${M_SUITE_5_V1}"
+echo "M_SUITE_5_V2 = ${M_SUITE_5_V2}"

@@ -1,0 +1,21 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   m_tc3_pl1
+## Author       :   Bradley Atkins
+## Description  :   Inherits M_RUN_HOST from host file 2 levels up
+## Date         :   14/02/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## M_JOB_HOST M_RUN_HOST
+## M_GREP_PATTERN "^[[:alnum:]]+: |^/.*: |error|info|warning"
+##
+##############################################################
+SCRIPT_NAME=m_tc3_pl1
+
+[[ ${VAR} == "String_l3" ]] || m_fail 2 "Error: Inherited variable VAR failed validation (${FUNCNAME})" 
+echo "VAR = ${VAR}"
+

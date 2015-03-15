@@ -1,0 +1,28 @@
+##############################################################
+##
+## Name         :   ms_arg_2
+## Author       :   Bradley Atkins
+## Description  :   Test inheritance and scope of variables
+## Date         :   17/12/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+#======================================
+# Child inherits from parent suite
+#======================================
+m_arg_1a 
+
+#======================================
+# Child overrides parent var
+#======================================
+m_arg_2a(-v MSV1="vor1" -v MSV2="vor2")
+
+#======================================
+# Child not affected by previous override
+#======================================
+m_arg_1a 
+
+
