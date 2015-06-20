@@ -82,14 +82,17 @@ LOG_LEVEL="${6}"        ## Log level
 
 source "${ENV}" || error_exit "Failed to source environemnt"
 
-[[ ${LOG_LEVEL} == "DEBUG" ]] && log_line "TMPFILE = ${TMPFILE}" "INFO"
-[[ ${LOG_LEVEL} == "DEBUG" ]] && log_line "LOG = ${LOG}" "INFO"
-[[ ${LOG_LEVEL} == "DEBUG" ]] && log_line "ENV = ${ENV}" "INFO"
-[[ ${LOG_LEVEL} == "DEBUG" ]] && log_line "CTL_FILE = ${CTL_FILE}" "INFO"
-[[ ${LOG_LEVEL} == "DEBUG" ]] && log_line "CONTROL = ${CONTROL}" "INFO"
-[[ ${LOG_LEVEL} == "DEBUG" ]] && log_line "LOG_LEVEL = ${LOG_LEVEL}" "INFO"
-[[ ${LOG_LEVEL} == "DEBUG" ]] && log_line "Arg validation passed for listener. Listening" "INFO"
-
+if [[ ${LOG_LEVEL} == "DEBUG" ]] 
+then
+    log_line "Starting rx on $(hostname). All args sourced" "INFO"
+    log_line "TMPFILE = ${TMPFILE}" "INFO"
+    log_line "LOG = ${LOG}" "INFO"
+    log_line "ENV = ${ENV}" "INFO"
+    log_line "CTL_FILE = ${CTL_FILE}" "INFO"
+    log_line "CONTROL = ${CONTROL}" "INFO"
+    log_line "LOG_LEVEL = ${LOG_LEVEL}" "INFO"
+    log_line "Arg validation passed for listener. Listening" "INFO"
+fi
 #======================================
 # Test we can write to the ctl directories
 #======================================

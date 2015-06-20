@@ -170,7 +170,7 @@ source "${ENV}" || error_exit "Failed to source environment file (${ENV})"
 #======================================
 if [[ ${LOG_LEVEL} == "DEBUG" ]] 
 then
-    log_line "Starting tx on $(hostname). All args validated" "INFO"
+    log_line "Starting tx on $(hostname). All args sourced" "INFO"
     log_line "LOG = ${LOG}" "INFO"
     log_line "CONTROL FILE = ${TX_CTL}" "INFO"
     log_line "ENV = ${ENV}" "INFO"
@@ -178,6 +178,7 @@ then
     log_line "CONTROL DIR = ${CONTROL}" "INFO"
     log_line "LOG_LEVEL = ${LOG_LEVEL}" "INFO"
     log_line "CNXN_DIR = ${CNXN_DIR}" "INFO"
+    log_line "Arg validation passed for transmitter. TX Running." "INFO"
 fi
 
 #======================================

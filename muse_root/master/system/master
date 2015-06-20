@@ -762,6 +762,7 @@ do
                 SM_PAYLOAD=$(echo "${SM_MSG}" | cut -d"|" -f ${M_MSG_PAYLOAD})
                 [[ ${SM_PAYLOAD} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Failed to find payload for msg (${SM_MSGS_ID}) (PROCESS_MSG_Q)" 
                 m_update_msgs_table "ack" 0 "msgs_id" "${SM_PAYLOAD}"
+                m_update_msgs_table "status" "PROCESSED" "msgs_id" "${SM_PAYLOAD}"
                 [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - ACK received for msg (${SM_PAYLOAD})" "INFO"
             fi
 

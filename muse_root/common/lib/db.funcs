@@ -548,9 +548,9 @@ m_get_msg_q()
 ## Description  :   Update a col in the msgs table 
 ## Date         :   20/04/2014
 ## Args         :   1 - Column
-##					2 - Value
-##					3 - Where clause
-##					4 - Where predicate
+##                  2 - Value
+##                  3 - Where clause
+##                  4 - Where predicate
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
