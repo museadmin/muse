@@ -6,7 +6,8 @@ Features:
 - Plugin based architecture
 - Simple syntax, shallow learning curve
 - Flexible Scheduling
-- Reporting and Sumarrisation
+- Reporting and Summarisation
 - Secure
 - Stateful
-- Written in BASH, so no language installation hassles
+- Written in BASH, so no need to install a runtime language
+- RAD Support
