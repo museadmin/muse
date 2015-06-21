@@ -1,14 +1,12 @@
 ##############################################################
 ##
-## Name         :   m_print_marker
-## Author       :   Bradley Atkins
-## Description  :   Print a standard marker to stdout. This is 
-##                  used to deliniate sections of output for 
-##                  post processing.
-## Date         :   19/08/2012
-## Args         :   1 - A single recognised valid marker char
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
+## Name		    :	print.funcs
+## Author	    :	Bradley Atkins
+## Description	:	Print functions for muse 
+## Date		    :	21/06/2015
+## Status	    :	Reviewed 	[n]
+##			        Tested 		[n]
+##			        Released 	[n]
 ##
 ## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -23,6 +21,21 @@
 ## along with this program; if not, write to the Free Software
 ## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
 ## USA
+##
+##############################################################
+
+##############################################################
+##
+## Name         :   m_print_marker
+## Author       :   Bradley Atkins
+## Description  :   Print a standard marker to stdout. This is 
+##                  used to deliniate sections of output for 
+##                  post processing.
+## Date         :   19/08/2012
+## Args         :   1 - A single recognised valid marker char
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##
 ##
 ##############################################################
 m_print_marker()

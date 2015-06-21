@@ -1,3 +1,30 @@
+/*
+##############################################################
+##
+## Name		    :	master_actions.sql
+## Author	    :	Bradley Atkins
+## Description	:	Main actions table for state machine
+## Date		    :	21/06/2015
+## Status	    :	Reviewed 	[n]
+##			        Tested 		[n]
+##
+## This program is free software; you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, version 2 only.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program; if not, write to the Free Software
+## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
+## USA
+##
+##############################################################
+*/
+
 -- Start up
 INSERT INTO state_machine (action, flag, note) VALUES ('SKIP','CONFIRM_MUSE_STATUS','Check if all core components are still running');
 INSERT INTO state_machine (action, flag, note) VALUES ('SKIP','VERIFY_SLAVES_REGISTERED','Check if all of the slaves have registered');

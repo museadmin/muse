@@ -1,4 +1,30 @@
-
+/*
+##############################################################
+##
+## Name		    :	master_states.sql
+## Author	    :	Bradley Atkins
+## Description	:	Table for tracking the state of the machine
+## Date		    :	21/06/2015
+## Args		    :	
+## Status	    :	Reviewed 	[n]
+##			        Tested 		[n]
+##
+## This program is free software; you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, version 2 only.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program; if not, write to the Free Software
+## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
+## USA
+##
+##############################################################
+*/
 INSERT INTO state (status, state_txt, note) VALUES (1,'TASKS_IN_Q','Tasks in the q waiting to be launched');
 INSERT INTO state (status, state_txt, note) VALUES (1,'MUSE_READY_TO_RUN',' True if all conditions for running met');
 INSERT INTO state (status, state_txt, note) VALUES (1,'SLAVES_REGISTERED','All slaves are registered');
