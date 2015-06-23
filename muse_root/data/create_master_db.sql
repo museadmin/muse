@@ -184,7 +184,7 @@ CREATE TABLE muse_hosts
     cluster_fqdn CHAR NOT NULL,                     -- Fully Qualified Domain name of cluster
     sname CHAR NOT NULL,                            -- Short name for server
     server_fqdn CHAR NOT NULL,                      -- Fully Qualified Server Name
-    server_type CHAR NOT NULL,                      -- Acronym denoting server type
+    server_type CHAR NOT NULL,                      -- Acronym denoting server type / host group
     os CHAR NOT NULL,                               -- Operating System 
     ip CHAR NOT NULL,                               -- IP address/es of server/s. CSV
     muse CHAR DEFAULT 'Y',                          -- If host has MUSE installed
