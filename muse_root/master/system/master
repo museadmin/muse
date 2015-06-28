@@ -276,6 +276,7 @@ include time.funcs
 include utils.funcs
 include msg.env
 include user.env
+include defaults.env
 
 [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - All include libraries added successfully" "INFO"
 

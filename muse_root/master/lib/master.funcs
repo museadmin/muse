@@ -11,20 +11,6 @@
 ##
 ## Date             :   20/07/2012
 ##
-## This program is free software; you can redistribute it and/or modify
-## it under the terms of the GNU General Public License as published by
-## the Free Software Foundation, version 2 only.
-##
-## This program is distributed in the hope that it will be useful,
-## but WITHOUT ANY WARRANTY; without even the implied warranty of
-## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with this program; if not, write to the Free Software
-## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
-## USA
-##
 ##############################################################
 
 #======================================
@@ -365,9 +351,7 @@ m_init()
     cp "${TMP}" "${M_DB_FILE}" || m_fail 2 "Error: Failed to copy master db file (${FUNCNAME})" 
     chmod +rw "${M_DB_FILE}" || m_fail 2 "Error: chmod failed for ("${M_DB_FILE}") (${FUNCNAME})" 
     M_DB="$(which ${M_SQLITE}) ${M_DB_FILE} "
-    M_DB_LOCK="${M_TMP}/sqlite.flock"
-    M_DB_ERROR="${M_TMP}/sqlite.error"
-    ## TODO Should the above be moved to master.env?
+    ## TODO Change this when adding sqlite3 to distribution
     
     :>"${M_SLAVE_REGISTER}"
     :>"${M_SLAVE_REGISTER_LOCK}"
@@ -2511,4 +2495,36 @@ m_get_host_file_from_args()
 
     eval ${2}=""
 }
+##############################################################
+##
+## Name         :   m_load_hosts
+## Author       :   Bradley Atkins
+## Description  :   Load the hosts data as defined in muse.hosts
+##                  Assumes third party tool has populated file
+## Date         :   24/06/2015
+## Args         :   -
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_load_hosts()
+{
 
+    [[ (-n ${HOSTS_DELIMITER}) && (-n ${COLUMN_ORDER}) ]] || m_fail 1 "Error: Defaults.env vars not set (${FUNCNAME})" 
+    local TMPFILE= MHOSTS=
+
+    m_get_tmp_file "${FUNCNAME}" TMPFILE
+    m_find_file muse.hosts MHOSTS
+    m_clean_file "${MHOSTS}" "${TMPFILE}"
+
+    local OLDIFS="${IFS}"
+    IFS="${HOSTS_DELIMITER}"
+
+    while eval read ${COLUMN_ORDER}
+    do
+        m_insert_host_data "${CLUSTER}" "${FQNAME}" "${SNAME}" "${IP}" "${TYPE}" "${OS}" 
+    done < "${TMPFILE}"
+    
+    IFS="${OLDIFS}"
+
+}

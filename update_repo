@@ -29,6 +29,6 @@
 ## USA
 ##
 ##############################################################
-for f in $(ls tmp); do t=$(find muse_root -type f -name $f); p4 edit $t; done
 for f in $(ls tmp); do t=$(find muse_root -type f -name $f); cp tmp/$f $t; done
 for f in $(ls tmp); do t=$(find muse_root -type f -name $f); diff tmp/$f $t; done
+for f in $(ls tmp); do t=$(find muse_root -type f -name $f); git add $t; done
