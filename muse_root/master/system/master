@@ -289,6 +289,11 @@ export M_EXEC_FAILURE=${M_EXEC_FAILURE}
 m_init 
 
 #======================================
+# Load our host data into the DB
+#======================================
+m_load_hosts
+
+#======================================
 # Process the command line
 #======================================
 [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Parsing command line" "INFO"
