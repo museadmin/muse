@@ -380,11 +380,21 @@ m_init()
     fi
 
     #======================================
-    # Site specific set for M_CLUSTER
+    # Site specific set for M_CLUSTER. If 
+    # host model is cluster then call get_cluster
+    # (user defined script to get the cluster identifier
     #======================================
-    m_find_file get_cluster GC
-    M_CLUSTER=$("${GC}")
-    export M_CLUSTER
+    case $(echo ${HOSTS_MODEL} | tr '[:upper:]' '[:lower:]') in 
+        "cluster")
+            m_find_file get_cluster GC
+            M_CLUSTER=$("${GC}")
+            export M_CLUSTER
+        ;;
+        "global")
+            export M_CLUSTER="production"
+        ;;
+        *) m_fail 2 "Error: Unrecognised Hosts Model (${HOSTS_MODEL}) \"cluster\" or \"global\" expected (${FUNCNAME})" ;;
+    esac
 }
 ##############################################################
 ##
@@ -975,7 +985,7 @@ m_validate_cmd_line()
                 M_ACTION=NORUN
                 return 0
                 ;;
-            -lstr) ## List files containing string
+            -grep) ## List files containing string
                 shift
                 m_remove_run_files
                 if [[ -n ${1} ]]

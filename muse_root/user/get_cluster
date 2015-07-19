@@ -1,0 +1,13 @@
+##############################################################
+##
+## Name         :   get_cluster
+## Author       :   Bradley Atkins
+## Description  :   User defined file should return the cluster
+##                  name on stdout.
+## Date         :   18/07/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+echo "t30.odd.blackspider.com"
