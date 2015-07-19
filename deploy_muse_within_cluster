@@ -35,7 +35,7 @@ echo "$(date)" > ${LOG}
     # get our server list
     #======================================
     tar --extract --file=muse.tar muse_root/user/muse.hosts
-    SERVER_LIST=$(sed -n '/'$1'/p' muse_root/user/muse.hosts | awk '{x = x" "$3}END{print x}')
+    SERVER_LIST=$(sed -n '/'$1'/p' muse_root/user/muse.hosts | awk '{x = x" "$3}END{print x}' FS=',')
 
     #======================================
     # Deploy the installer and tar ball
