@@ -493,7 +493,7 @@ do
         #======================================
         m_create_master_cnxns 
         m_write_state "TRUE" "CNXN_MGR_RUNNING"
-        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Connect manager reported running" "INFO"
+        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Connection manager reported running" "INFO"
         m_write_action "SKIP" "INITIALISE_COMMS"
     fi
 

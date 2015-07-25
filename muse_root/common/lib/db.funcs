@@ -46,13 +46,12 @@ m_select_host_data()
     A2=$2
     A3=$3
     A4=$4
-    M_CLUSTER=$M_CLUSTER
     
     #======================================
     # Query the database
     #======================================
 	while ! ${M_DB} > "${TMPFILE}" 2>/dev/null <<-EOF
-		select $1 from muse_hosts where $2 = '$3' and cluster_fqdn = '${M_CLUSTER}';
+		select $1 from muse_hosts where $2 = '$3';
 	EOF
 	do
 		[[ $((TO -=1)) -le 0 ]] && m_fail 13 "Error: select failed. ($(cat ${TMPFILE})) (${FUNCNAME})"
@@ -375,7 +374,7 @@ m_get_ack_q()
     #======================================
     # Assign results to variable passed in $1
     #======================================
-    eval ${1}="${TMPFILE1}"
+    eval ${1}="${TMPFILE}"
 }
 
 ##############################################################

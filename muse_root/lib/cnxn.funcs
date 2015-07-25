@@ -44,7 +44,7 @@ m_create_master_cnxns()
     [[ -n ${M_SERVER_LIST} ]] || m_fail 2 "Error: Server list empty (${FUNCNAME})" 
     M_SERVER_LIST=$(echo ${M_SERVER_LIST} | tr " " "\n" | sort -u | tr "\n" " ")
     M_NUM_SERVERS=$(echo ${M_SERVER_LIST} | wc -w)
-    [[ ${M_NUM_SERVERS} =~ ^[0-9]$ ]] || m_fail 2 "Error: Number of servers failed validation (${FUNCNAME})"
+    [[ ${M_NUM_SERVERS} =~ ^[0-9]+$ ]] || m_fail 2 "Error: Number of servers failed validation (${FUNCNAME})"
     [[ -n ${M_MSG_USR} ]] || m_fail 2 "Error: Muse user not set (${FUNCNAME})" 
     [[ -n "${M_CNXN_PATH}" ]] || m_fail 2 "Error: Connection path not set (${FUNCNAME})" 
 

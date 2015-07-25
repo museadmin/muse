@@ -310,6 +310,7 @@ do
         if m_read_state "DUMP_LOADED"
         then
             m_write_state "TRUE" "SLAVE_READY_TO_EXECUTE"
+            m_write_action "ACT" "CHECK_FOR_ACK_TX"
             m_write_action "SKIP" "VERIFY_READY_TO_EXECUTE"
             [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Slave ready to execute"  "INFO"
         fi
@@ -570,9 +571,10 @@ do
                 m_new_outbound_msg "0" "${SM_TM}" "${SM_MSG_THREAD_ID}" "2" "$(hostname)" "${SM_MSG_SENDER}" "ACK" "${SM_MSG_SENDER_ID}" "OUTBOUND" "NEW" "${M_SESSION_ID}" SM_MID
                 m_inc_thread_id
                 m_update_ack_ctl_table "sent" "${SM_TM}" "msgs_id" "${SM_MSGS_ID}"
+                [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "ACK sent for msg (${SM_MSGS_ID})" "INFO"
             done < "${SM_ACK_Q}"
-            :>"${SM_ACK_Q}"
         fi
+        :>"${SM_ACK_Q}"
     fi
 
     #======================================

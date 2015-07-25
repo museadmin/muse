@@ -222,11 +222,10 @@ m_get_run_hosts()
     #======================================
     for VALUE in ${TMPSTR2}
     do
-        ## Test for TYPE
-        if [[ ${H_TYPES} == *${VALUE}* ]]
+        ## Test for Hostgroup
+        m_select_host_data server_fqdn server_type ${VALUE} TMPSTR1
+        if [[ -n ${TMPSTR1} ]]
         then
-            m_select_host_data server_fqdn server_type ${VALUE} TMPSTR1
-            [[ -n ${TMPSTR1} ]] || m_fail 2 "Error: No names returned for server type (${VALUE}) (${FUNCNAME})" 
             LIST="$(echo ${LIST} ${TMPSTR1})"
 
         ## Test for IP address
@@ -2521,7 +2520,7 @@ m_load_hosts()
 {
 
     [[ (-n ${HOSTS_DELIMITER}) && (-n ${COLUMN_ORDER}) ]] || m_fail 1 "Error: Defaults.env vars not set (${FUNCNAME})" 
-    local TMPFILE= MHOSTS=
+    local TMPFILE= MHOSTS= 
 
     m_get_tmp_file "${FUNCNAME}" TMPFILE
     m_find_file muse.hosts MHOSTS
@@ -2530,11 +2529,21 @@ m_load_hosts()
     local OLDIFS="${IFS}"
     IFS="${HOSTS_DELIMITER}"
 
-    while eval read ${COLUMN_ORDER}
-    do
-        m_insert_host_data "${CLUSTER}" "${FQNAME}" "${SNAME}" "${IP}" "${TYPE}" "${OS}" 
-    done < "${TMPFILE}"
-    
-    IFS="${OLDIFS}"
+    case ${HOSTS_MODEL} in
+        "global")
+            while eval read ${COLUMN_ORDER}
+            do
+                m_insert_host_data "${CLUSTER}" "${SNAME}" "${FQNAME}" "${TYPE}" "${OS}" "${IP}"
+            done < "${TMPFILE}"
+        ;;
+        "cluster")
+            while eval read ${COLUMN_ORDER}
+            do
+                m_insert_host_data "${CLUSTER}" "${SNAME}" "${FQNAME}" "${TYPE}" "${OS}" "${IP}"
+            done < <(sed -n '/'${M_CLUSTER}'/p' "${TMPFILE}")
+        ;;
+        *) m_fail 13 "Error: Unrecognised HOSTS_MODEL (${FUNCNAME})";;
+    esac
 
+    IFS="${OLDIFS}"
 }
