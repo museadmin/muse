@@ -709,7 +709,7 @@ do
                         m_update_exec_data ${SM_SID} finish_time $(date +%s)
                         m_update_exec_data ${SM_SID} exec_line 0
                         m_update_exec_data ${SM_SID} state 1
-                        #echo "Finish - ${SM_SUITE_NAME}"
+                        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Completed suite (${SM_SUITE_NAME})" "INFO"
                     fi
                 done < "${SM_SIDS}"
             else

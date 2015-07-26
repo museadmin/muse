@@ -11,3 +11,6 @@ Features:
 - Stateful
 - Written in BASH, so no need to install a runtime language
 - RAD Support
+
+Entry point for MASTER is muse_root/master/system/master
+
