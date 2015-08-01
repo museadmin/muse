@@ -493,6 +493,10 @@ m_parse_report()
             printf "\n\n"
         } >> "${ERRS}"
     fi
+
+    #======================================
+    # Update the screen with the result
+    #======================================
     if [[ ${FAILED} == "true" ]] 
     then
         m_update_run_screen_body  "${EXEC_ORDER}" "${M_CLR_NOT_OK}"
@@ -1049,6 +1053,12 @@ m_validate_cmd_line()
                 M_ACTION=NORUN
                 return 0
                 ;;
+            -sm) ## Set screen mode
+                shift 
+                [[ (${1} == 'dynamic') || (${1} == 'flat') ]] || m_fail 2 "Error: Usage. Unrecognised screen mode (${1}) (${FUNCNAME})"
+                export M_SCREEN_MODE="${1}"
+                shift
+            ;;
             -t|--tag) ## Set a user tag
                 shift
                 mkdir "/tmp/${1}" 2>/dev/null || m_fail 2 "Error: Invalid tag name passed (${FUNCNAME})"  

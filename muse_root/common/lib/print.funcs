@@ -1,12 +1,12 @@
 ##############################################################
 ##
-## Name		    :	print.funcs
-## Author	    :	Bradley Atkins
-## Description	:	Print functions for muse 
-## Date		    :	21/06/2015
-## Status	    :	Reviewed 	[n]
-##			        Tested 		[n]
-##			        Released 	[n]
+## Name         :   print.funcs
+## Author       :   Bradley Atkins
+## Description  :   Print functions for muse 
+## Date         :   21/06/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
 ##
 ## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -24,6 +24,40 @@
 ##
 ##############################################################
 
+##############################################################
+##
+## Name         :   m_print_master_exec_line
+## Author       :   Bradley Atkins
+## Description  :   Print the exec line for this point in the run
+##                  i.e. What is latest plugin and where
+## Date         :   01/08/2015
+## Args         :   1 - Exec order
+##                  2 - Plugin name
+##                  3 - Host
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+m_print_master_exec_line()
+{
+    [[ $# -eq 3 ]] || m_fail 13 "Error: Usage. Arg count. 3 expected  (${FUNCNAME})" 
+    [[ "${1}" =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage. Arg[1]. Integer expected (${FUNCNAME})" 
+    [[ "${2}" =~ ^m_[a-zA-Z_]+$ ]] || m_fail 13 "Error: Usage. Arg[2]. Plugin name expected (${FUNCNAME})" 
+    [[ -n "${3}" ]] || m_fail 13 "Error: Usage. Arg[3]. Host name expected (${FUNCNAME})" 
+
+    if [[ "${M_SCREEN_MODE}" == "dynamic" ]]
+    then
+        printf " %-6s%-${M_JOB_LINE_WIDTH}s %s\n" \
+            "(${1})" "$(echo $(date +"%H:%M:%S"): - ${2} | cut -c 1-${M_JOB_LINE_WIDTH})" \
+                "(${3})" >> "${M_MAIN_SCREEN_BODY}"
+    elif [[ "${M_SCREEN_MODE}" == "flat" ]]
+    then
+        printf " %-6s%-${M_JOB_LINE_WIDTH}s %s\n" \
+            "(${1})" "$(echo $(date +"%H:%M:%S"): - ${2} | cut -c 1-${M_JOB_LINE_WIDTH})" "(${3})"
+    else
+        m_fail 13 "Error: Unrecognised screen mode (${M_SCREEN_MODE}) (${FUNCNAME})" 
+    fi
+}
 ##############################################################
 ##
 ## Name         :   m_print_marker
@@ -66,42 +100,82 @@ m_print_marker()
 ##############################################################
 m_print_master_header()
 {
-    [[ -n ${M_MAIN_SCREEN_HEAD} ]] || m_fail 3 "Error: Run screen header not set (${FUNCNAME})" 
+    if [[ "${M_SCREEN_MODE}" == "dynamic" ]]
+    then
+        [[ -n ${M_MAIN_SCREEN_HEAD} ]] || m_fail 3 "Error: Run screen header not set (${FUNCNAME})" 
 
-    {
-        printf "%-${M_STATUS_OFFSET}s%s\n" "${C_BREAK}"
-        printf "%-${M_STATUS_OFFSET}s%s\n" " Status" ": Commencing MUSE run"
-        printf "%-${M_STATUS_OFFSET}s%s\n" " Start" ": $(date)"
-        printf "%-${M_STATUS_OFFSET}s%s\n" " Master" ": ${M_MASTER_HOST}"
-        printf "%-${M_STATUS_OFFSET}s%s\n" " User Tag" ": ${M_USR_TAG}"
-        printf "%-${M_STATUS_OFFSET}s%s\n" " Sys  Tag" ": $(echo ${M_SYS_TAG} | sed 's/^[.]//g')"
-        printf "%s\n" "${C_BREAK}"
+        {
+            printf "%-${M_STATUS_OFFSET}s%s\n" "${C_BREAK}"
+            printf "%-${M_STATUS_OFFSET}s%s\n" " Status" ": ${M_SCREEN_STATUS_MSG}"
+            printf "%-${M_STATUS_OFFSET}s%s\n" " CMD" ": "$(cat ${M_MS_CMD_LINE})
+            printf "%-${M_STATUS_OFFSET}s%s\n" " Start" ": $(date)"
+            printf "%-${M_STATUS_OFFSET}s%s\n" " Master" ": ${M_MASTER_HOST}"
+            printf "%-${M_STATUS_OFFSET}s%s\n" " User Tag" ": ${M_USR_TAG}"
+            printf "%-${M_STATUS_OFFSET}s%s\n" " Sys  Tag" ": $(echo ${M_SYS_TAG} | sed 's/^[.]//g')"
+            printf "%s\n" "${C_BREAK}"
+        
+        } > "${M_MAIN_SCREEN_HEAD}"
     
-    } > "${M_MAIN_SCREEN_HEAD}"
+    elif [[ "${M_SCREEN_MODE}" == "flat" ]]
+    then
+        if ! ${M_SCREEN_HEADER_PRINTED}
+        then
+            printf "%-${M_STATUS_OFFSET}s%s\n" "${C_BREAK}"
+            printf "%-${M_STATUS_OFFSET}s%s\n" " CMD" ": "$(cat ${M_MS_CMD_LINE})
+            printf "%-${M_STATUS_OFFSET}s%s\n" " Start" ": $(date)"
+            printf "%-${M_STATUS_OFFSET}s%s\n" " Master" ": ${M_MASTER_HOST}"
+            printf "%-${M_STATUS_OFFSET}s%s\n" " User Tag" ": ${M_USR_TAG}"
+            printf "%-${M_STATUS_OFFSET}s%s\n" " Sys  Tag" ": $(echo ${M_SYS_TAG} | sed 's/^[.]//g')"
+            printf "%s\n" "${C_BREAK}"
+            export M_SCREEN_HEADER_PRINTED=true
+        fi
+    
+    else
+        m_fail 13 "Error: Unrecognised screen mode (${FUNCNAME})" 
+    fi
 }
 ##############################################################
 ##
 ## Name         :   m_print_master_footer
 ## Author       :   Bradley Atkins
-## Description  :   Print a footer for the master stdout
+## Description  :   Print a footer for the master stdout if 
+##                  running in dynamic mode
 ## Date         :   29/09/2012
 ## Args         :   
 ## Status       :   Reviewed    [n]
-##              Tested      [n]
-##              Released    [n]
+##                  Tested      [n]
+##                  Released    [n]
 ##############################################################
 m_print_master_footer()
 {
-    printf "%s\n" "${C_BREAK}"
-    if [[ ${M_TOTAL_FAILURES} -gt 0 ]]
+    #======================================
+    # If running in static mode then just ret
+    #======================================
+    if [[ "${M_SCREEN_MODE}" == "dynamic" ]]
     then
-        printf "${M_CLR_NOT_OK}%-20s%s${C_CLEAR}\n" " Status" ": Completed WITH (${M_TOTAL_FAILURES}) problems"
-    else
-        printf "${M_CLR_OK}%-20s%s${C_CLEAR}\n" " Status" ": Clean run. No problems reported."
-    fi
+        printf "%s\n" "${C_BREAK}"
+        if [[ ${M_TOTAL_FAILURES} -gt 0 ]]
+        then
+            printf "${M_CLR_NOT_OK}%-20s%s${C_CLEAR}\n" " Status" ": Completed WITH (${M_TOTAL_FAILURES}) problems"
+        else
+            printf "${M_CLR_OK}%-20s%s${C_CLEAR}\n" " Status" ": Clean run. No problems reported."
+        fi
 
-    printf "%-20s%s\n" " Finish Time" ": $(date)"
-    printf "%s\n" "${C_BREAK}"
+        printf "%-20s%s\n" " Finish Time" ": $(date)"
+        printf "%s\n" "${C_BREAK}"
+    elif [[ "${M_SCREEN_MODE}" == "flat" ]]
+    then
+        printf "%s\n" "${C_BREAK}"
+        if [[ ${M_TOTAL_FAILURES} -gt 0 ]]
+        then
+            printf "%-20s%s\n" " Status" ": Completed WITH (${M_TOTAL_FAILURES}) problems"
+        else
+            printf "%-20s%s\n" " Status" ": Clean run. No problems reported."
+        fi
+
+        printf "%-20s%s\n" " Finish Time" ": $(date)"
+        printf "%s\n" "${C_BREAK}"
+    fi
 }
 ##############################################################
 ##
@@ -116,6 +190,12 @@ m_print_master_footer()
 ##############################################################
 m_print_run_footer()
 {
+    #======================================
+    # If we're not in dynamic screen mode
+    # then just return as nothing to do
+    #======================================
+    [[ "${M_SCREEN_MODE}" == "dynamic" ]] || return
+
     local SLAVE="Slaves"
     [[ ${M_SLAVE_TALLY} -eq 1  ]] && SLAVE="Slave"
 
@@ -160,6 +240,12 @@ m_print_run_footer()
 ##############################################################
 m_update_run_screen_body()
 {
+    #======================================
+    # If we're not in dynamic screen mode
+    # then just return as nothing to do
+    #======================================
+    [[ "${M_SCREEN_MODE}" == "dynamic" ]] || return
+
     [[ $# -eq 2 ]] || m_fail 3 "Error: Usage. Arg count. 2 expected (${FUNCNAME})" 
     [[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 3 "Error: Usage. Args [1]. (${1}) Integer expected (${FUNCNAME})"
     [[ -n ${2} ]] || m_fail 3 "Error: Usage. Args [2]. Non empty string expected (${FUNCNAME})" 
@@ -221,9 +307,8 @@ m_update_run_screen_body()
 m_print_error_footer()
 {
     printf "%s\n" "${C_BREAK}"
-    printf "%s\n" " Finish: $(date)"
-    printf "\t\t%s\n" " EARLY EXIT DUE TO FAILURE"
-    printf "%s\n" "${M_LAST_FAIL_MSG}"
+    printf "%s\n\n" " Finish: $(date)"
+    printf "\t\t%s\n\n" " FAILURES REPORTED IN MUSE RUN"
     printf "%s\n" "${C_BREAK}"
 }
 ##############################################################

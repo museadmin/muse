@@ -121,6 +121,7 @@ usage()
     printf "\t%s\n" "${0##*/} -mdb|--mdatabase          :Login to the master database for the last run"
     printf "\t%s\n" "${0##*/} -s|--show                 :Show current results tag"
     printf "\t%s\n" "${0##*/} -sdb|--sdatabase          :Login to the slave database for the last run"
+    printf "\t%s\n" "${0##*/} -sm [dynamic|flat]        :Set the creen mode to dynamic or flat"
     printf "\t%s\n" "${0##*/} -t|--tag  [name]          :Set current results tag to name"
     printf "\t%s\n" "${0##*/} -vp <name>                :View plugin 'name'"
     printf "\t%s\n" "${0##*/} -vip <name>               :Edit plugin 'name'in vi"
@@ -415,6 +416,8 @@ do
                 m_write_action "ACT" "CHECK_FOR_ACK_TX"
                 m_write_action "ACT" "PROCESS_EXECUTION_THREADS"
                 m_write_action "ACT" "UPDATE_RUN_SCREEN_FOOT"
+                m_write_action "ACT" "UPDATE_RUN_SCREEN_HEAD"
+                export M_SCREEN_STATUS_MSG="MUSE Running on all nodes"
                 
                 [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Confirmed MUSE ready to run" "INFO"
                
@@ -461,13 +464,16 @@ do
     
     if m_read_action "REFRESH_RUN_SCREEN"
     then
-        #======================================
-        # Run  screen needs redrawing
-        #======================================
-        clear
-        cat "${M_MAIN_SCREEN_HEAD}"
-        [[ -f "${M_MAIN_SCREEN_BODY}" ]] && cat "${M_MAIN_SCREEN_BODY}"
-        cat "${M_MAIN_SCREEN_FOOT}"
+        if [[ "${M_SCREEN_MODE}" == "dynamic" ]]
+        then
+            #======================================
+            # Run  screen needs redrawing
+            #======================================
+            clear
+            cat "${M_MAIN_SCREEN_HEAD}"
+            [[ -f "${M_MAIN_SCREEN_BODY}" ]] && cat "${M_MAIN_SCREEN_BODY}"
+            cat "${M_MAIN_SCREEN_FOOT}"
+        fi
         m_write_action "SKIP" "REFRESH_RUN_SCREEN"
     fi
 
@@ -648,11 +654,11 @@ do
                                         # Run a plugin. Send msg to slave etc
                                         #======================================
                                         m_select_host_data "sname" "server_fqdn" "${SM_HOST}" SM_SHOST
-
-                                        printf " %-6s%-${M_JOB_LINE_WIDTH}s %s\n" \
-                                            "(${SM_EXEC_ORDER})" \
-                                                "$(echo $(date +"%H:%M:%S"): - ${SM_NAME} | cut -c 1-${M_JOB_LINE_WIDTH})" \
-                                                    "(${SM_SHOST})" >> "${M_MAIN_SCREEN_BODY}"
+                                        
+                                        #======================================
+                                        # Print the exec line for the screen
+                                        #======================================
+                                        m_print_master_exec_line "${SM_EXEC_ORDER}" "${SM_NAME}" "${SM_SHOST}" 
 
                                         ## Schedule a screen refresh
                                         m_write_action "ACT" "REFRESH_RUN_SCREEN"
@@ -1136,6 +1142,8 @@ do
             m_write_state "TRUE" "SHUTDOWN_MSGS_SENT"
             m_write_action "SKIP" "SHUTDOWN_MUSE"
             m_write_action "ACT" "CONFIRM_ALL_SLAVES_EXITED"
+            m_write_action "ACT" "UPDATE_RUN_SCREEN_HEAD"
+            export M_SCREEN_STATUS_MSG="MUSE Shutting Down on All Nodes"
 
             [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Action = SHUTDOWN_MUSE. Initiating Shutdown Sequence" "INFO"
         fi
@@ -1186,21 +1194,50 @@ done
 # TODO m_post_run_tasks currenly handles error parsing
 # need to do this as an action when results received at runtime
 
-#======================================
-# Clear the run status and just print
-# the run details
-#======================================
-clear
-cat "${M_MAIN_SCREEN_HEAD}"
-[[ -f "${M_MAIN_SCREEN_BODY}" ]] && cat "${M_MAIN_SCREEN_BODY}"
-[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - All processes complete. Exiting" "INFO"
 
-if m_read_state "ERRORS_OCCURRED"
+if [[ "${M_SCREEN_MODE}" == "dynamic" ]] 
 then
-    m_print_error_footer
-    exit 1
+    if [[ (-f "${M_MAIN_SCREEN_HEAD}") && (-f "${M_MAIN_SCREEN_BODY}") ]]
+    then
+        #======================================
+        # Clear the run status and print
+        # the run details and footer
+        #======================================
+        M_SCREEN_STATUS_MSG="Shutdown Complete. Exiting"
+        m_print_master_header
+        
+        clear
+
+        cat "${M_MAIN_SCREEN_HEAD}"
+        cat "${M_MAIN_SCREEN_BODY}"
+
+        if m_read_state "ERRORS_OCCURRED"
+        then
+            m_print_error_footer
+            exit 1
+        else
+            m_print_master_footer
+            exit 0
+        fi
+    else
+        clear
+        echo "Indeterminate screen setup"
+    fi
+
+elif [[ "${M_SCREEN_MODE}" == "flat" ]]
+then
+        if m_read_state "ERRORS_OCCURRED"
+        then
+            m_print_error_footer
+            exit 1
+        else
+            m_print_master_footer
+            exit 0
+        fi
+    
 else
-    m_print_master_footer
-    exit 0
+    clear 
+    echo "Unrcognised screen mode (${M_SCREEN_MODE}) \"dynamic\" or \"flat\" expected"
 fi
 
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - All processes complete. Exiting" "INFO"
