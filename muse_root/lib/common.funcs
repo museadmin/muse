@@ -424,42 +424,6 @@ m_new_outbound_msg()
 }
 ##############################################################
 ##
-## Name         :   m_get_epoch_milliseconds
-## Author       :   Bradley Atkins
-## Description  :   Return the epoch time in milli seconds
-## Date         :   06/04/2014
-## Args         :   1 - Name of variable to return value in
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##############################################################
-m_get_epoch_milliseconds()
-{
-    [[ ${1} =~ ^[A-Z0-9_]+$ ]] || m_fail 2 "Error: MUSE variable name expected (${FUNCNAME})" 
-    local T="$(($(date +%s%N)/1000000))"
-    [[ ${T} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Failed to recover epoch time. (${FUNCNAME})" 
-    eval ${1}=${T}
-}
-##############################################################
-##
-## Name         :   m_get_epoch_seconds
-## Author       :   Bradley Atkins
-## Description  :   Return the epoch time in seconds
-## Date         :   06/04/2014
-## Args         :   1 - Name of variable to return value in
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##############################################################
-m_get_epoch_seconds()
-{
-    [[ ${1} =~ ^[A-Z0-9_]+$ ]] || m_fail 2 "Error: MUSE variable name expected (${FUNCNAME})" 
-    local T="$(date +%s)"
-    [[ ${T} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Failed to recover epoch time. (${FUNCNAME})" 
-    eval ${1}=${T}
-}
-##############################################################
-##
 ## Name         :   m_update_file
 ## Author       :   Bradley Atkins
 ## Description  :   Find a line by pattern or number in a file
