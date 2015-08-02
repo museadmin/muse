@@ -1,0 +1,299 @@
+##############################################################
+##
+## Name         :   munit.env
+## Author       :   Bradley Atkins
+## Description  :   Environment vars for MUNIT
+## Date         :   02/08/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+set -a
+
+    #======================================
+    # Control
+    #======================================
+    MU_LOG_LEVEL="DEBUG"
+
+    #======================================
+    # MUSE root
+    #======================================
+    MU_MUSE_ROOT="/usr/local/bin/muse_root"
+    MU_MUSE_DEV_ROOT="/opt/mailcontrol/.muse_dev"
+    
+    #======================================
+    # Paths to the results / ctrl files 
+    # for MUSE
+    #======================================
+    MU_MASTER_RESULTS_ROOT="/var/tmp/muse/run/master"
+    MU_SLAVE_RESULTS_ROOT="/var/tmp/muse/run/slave"
+
+
+    #======================================
+    # Logging
+    #======================================
+    MU_LOG="/var/log/munit/munit.log"
+
+    #======================================
+    # Test servers used by MUNIT
+    #======================================
+    MU_MASTER_HOST="dev01o"
+    MU_SLAVE_HOST="dev01o"
+
+    #======================================
+    # MUNIT directories
+    #======================================
+    MU_MUNIT_ROOT="/opt/mailcontrol/.muse_dev"
+    MU_TMP="/var/tmp/munit/tmp"
+
+    #======================================
+    # MUNIT test definitions
+    #======================================
+    MU_TEST_DEFS="${MU_MUNIT_ROOT}/test"
+
+    #======================================
+    # Path to MUNIT libraries
+    #======================================
+    MU_LIB="${MU_MUNIT_ROOT}/lib"
+
+    #======================================
+    # Path to MUNIT control files
+    #======================================
+    MU_CTL="${MU_MUNIT_ROOT}/ctl"
+
+    #======================================
+    # Temporary runtime files
+    #======================================
+    MU_MUSE_MAP="${MU_TMP}/mu_muse_map"
+    MU_MUNIT_MAP="${MU_TMP}/mu_test_map"
+    MU_TEST_LOG="${MU_TMP}/mu_test_log"
+
+    #======================================
+    # Runtime vars
+    #======================================
+    MU_ERRORS=0
+    MU_FAILURES=0
+    MU_TESTS=0
+    MU_ASSERTIONS=0
+    MU_CMD_LINE=""
+    MU_TEST_NAMES=""
+
+##############################################################
+##
+## Name         :   usage
+## Author       :   Bradley Atkins
+## Description  :   Display the usage
+## Date         :   01/08/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+usage()
+{
+    printf "\n"
+    printf "\t%s\n" "usage: ${0##*/} [-option] file file ..."
+    printf "\n"
+    printf "\t%s\n" "${0##*/} <test name>           :Run a test suite"
+    printf "\t%s\n" "${0##*/} -a|--all              :Archive tagged results"
+
+}
+
+##############################################################
+##
+## Name         :   mu_find_file
+## Author       :   Bradley Atkins
+## Description  :   Find a file. If no filter set then first 
+##                  search MUNIT then MUSE. 
+## Date         :   02/08/2015
+## Args         :   1 - file name
+##                  2 - Variable name for return value
+##                  3 - MUSE | MUNIT Optional filter
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+mu_find_file()
+{
+    [[ -n "${1}" ]] || die "Usage. Arg[1]. File name expected  (${FUNCNAME})"
+    [[ -n "${2}" ]] || die "Usage. Arg[2]. Variable name expected  (${FUNCNAME})"
+    local FILTER=${3:-MUNIT} MAPS=""
+    [[ -r "${MU_MUNIT_MAP}" ]] || die "Failed to find readable MUNIT map file (${MU_MUNIT_MAP})  (${FUNCNAME})"
+
+    if [[ $# -ne 3 ]]
+    then
+        MAPS="${MU_MUNIT_MAP} ${MU_MUSE_MAP}"
+    elif [[ "${FILTER}" == "MUNIT" ]]
+    then
+        MAPS="${MU_MUNIT_MAP}"
+    elif [[ "${FILTER}" == "MUSE" ]]
+    then
+        MAPS="${MU_MUSE_MAP}"
+    fi
+
+    for MAP in ${MAPS}
+    do
+        while read FPATH
+        do
+            if [[ "$(basename ${FPATH})" == "${1}" ]] 
+            then
+                eval ${2}='"${FPATH}"'
+                break
+            fi
+        done < "${MAP}"
+    done
+}
+
+##############################################################
+##
+## Name         :   include
+## Author       :   Bradley Atkins
+## Description  :   Source file passed in arg 1
+## Date         :   02/08/2015
+## Args         :   1 - Library to include
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+include()
+{
+    [[ $# -eq 1 ]] || die "Usage. Arg[1]. Filename expected (${FUNCNAME})"
+    local FILE=""
+
+    #======================================
+    # Find the file 
+    #======================================
+    mu_find_file "${1}" FILE MUNIT
+
+    [[ -r "${FILE}" ]] || die "Include library (${FILE}) not a readable file (${FUNCNAME})"
+    source "${FILE}" || die "Include failed for library (${FILE}) (${FUNCNAME})"
+}
+
+##############################################################
+##
+## Name         :   mu_get_tmp_file
+## Author       :   Bradley Atkins
+## Description  :   Create a tmp file
+## Date         :   02/08/2015
+## Args         :   1 - Calling function
+##                  2 - Variable name to return path to file
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+mu_get_tmp_file()
+{
+    [[ $# -eq 2 ]] || die "Usage. Arg count. 2 expected (${FUNCNAME})"
+    [[ -n "${1}" ]] || die "Usage. Arg[1]. Caller name expected"
+    [[ -n "${2}" ]] || die "Variable name expected"
+
+    local FILE="${MU_TMP}/${1}.${RANDOM}"
+    while [[ -f "${FILE}" ]] 
+    do
+        FILE="${MU_TMP}/${1}.${RANDOM}"
+    done
+
+    eval ${2}='"${FILE}"'
+}
+##############################################################
+##
+## Name         :   mu_clean_file
+## Author       :   Bradley Atkins
+## Description  :   Strip out comments etc from a file
+##                  If source and dest are the same then overwrite
+## Date         :   02/08/2015
+## Args         :   1 - Fully qualified file name (source)
+##                  2 - Fully qualified file name (output)
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+mu_clean_file()
+{
+    [[ $# -eq 2 ]] || die "Error: Usage args (${FUNCNAME})"
+
+    if [[ "${1}" == "${2}" ]] 
+    then
+        local FILE
+        mu_get_tmp_file ${FUNCNAME} FILE 
+        sed 's/[#].*$//g' "${1}" | awk NF > "${FILE}"
+        for s in ${PIPESTATUS[@]}; do [[ $s -eq 0 ]] || die "Error:Pipe failed 1 (${FUNCNAME})" ; done 
+        mv "${FILE}" > "${1}" || die "Failed to overwrite target file (${2}) (${FUNCNAME})"
+    else
+        sed 's/[#].*$//g' "${1}" | awk NF > "${2}" || die "Failed to overwrite target file (${2}) (${FUNCNAME})"
+        for s in ${PIPESTATUS[@]}; do [[ $s -eq 0 ]] || die "Error:Pipe failed 2 (${FUNCNAME})" ; done 
+    fi
+}
+
+##############################################################
+##
+## Name         :   validate_cmd_line
+## Author       :   Bradley Atkins
+## Description  :   Check the cmd line is valid
+## Date         :   02/08/2015
+## Args         :   1 - Entire command line
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+validate_cmd_line()
+{
+    local FILE
+
+    while [[ $# -gt 0 ]]
+    do
+        case ${1} in
+            -a|--all)
+                shift
+                [[ $# -gt 0 ]] || die "Usage. Option all requires no arguments"
+
+                #======================================
+                # User wants to run all tests
+                #======================================
+                for FILE in $(find "${MU_TEST_DEFS}" -type f -name mu_\*)
+                do
+                    MU_TEST_NAMES="${MU_TEST_NAMES} $(basename ${FILE})"
+                done
+                [[ -n "${MU_TEST_NAMES}" ]] || die "No tests found in (${MU_TEST_DEFS})"
+            ;;
+            mu_*)
+                #======================================
+                # User wants to run specific test/s
+                #======================================
+                [[ ${1} == mu_* ]] || die "Usage. Test name must begin with mu_"
+                MU_TEST_NAMES="${MU_TEST_NAMES} ${1}"
+                shift
+            ;;
+        esac
+    done
+    
+    #======================================
+    # Confirm they can all be found
+    #======================================
+    for FILE in ${MU_TEST_NAMES}
+    do
+        mu_find_file "${FILE}" FILE
+    done
+}
+
+##############################################################
+##
+## Name         :   mu_log_line
+## Author       :   Bradley Atkins
+## Description  :   Write a line to the log
+## Date         :   02/08/2015
+## Args         :   1 - Line
+##                  2 - Error Level
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+mu_log_line()
+{
+    [[ "${1}" == "Failed to write to log" ]] && return
+
+    echo "$(date): ${2}: ${1}" >> "${MU_LOG}" || die "Failed to write to log"
+}
+
+
+set +a

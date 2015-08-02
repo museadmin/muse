@@ -1,0 +1,170 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   munit
+## Author       :   Bradley Atkins
+## Description  :   Unit test harness for MUSE core functions
+## Date         :   01/08/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+##              :   MUNIT is released by Bradley Atkins 
+##              :   Copyright (C) 2015 info@bradleyatkins.com
+##
+## This program is free software; you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, version 2 only.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program; if not, write to the Free Software
+## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
+## USA
+##
+##############################################################
+
+
+##############################################################
+##
+## Name         :   cleanup
+## Author       :   Bradley Atkins
+## Description  :   Perform a clean exit in all states
+## Date         :   01/08/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+cleanup()
+{
+    #======================================
+    # Explicitely close any open descriptors
+    # in case we are being called via ssh
+    #======================================
+    for fd in $(ls /proc/$$/fd); do
+        case "$fd" in
+            0|1|2|255)
+            ;;
+            *)
+                eval "exec $fd>&-"
+            ;;
+        esac
+    done
+}
+
+
+##############################################################
+##
+## Name         :   die
+## Author       :   Bradley Atkins
+## Description  :   Handle a fatal error
+## Date         :   02/08/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+die()
+{
+    [[ -w "${MU_LOG}" ]] && echo "$(date): ERROR: ${1}" >> "${MU_LOG}"
+    echo "$(date): ERROR: ${1}"
+    exit 1
+}
+
+#======================================
+# Bootstrap
+#======================================
+
+source ./munit_bootstrap
+[[ -d "${MU_MUSE_ROOT}" ]] || die "Env variable MU_MUSE_ROOT not a directory (munit)"
+[[ -d "${MU_MUSE_DEV_ROOT}" ]] || die "Env variable MU_MUSE_DEV_ROOT not a directory (munit)"
+[[ -n "${MU_MASTER_RESULTS_ROOT}" ]] || die "Env variable MU_MASTER_RESULTS_ROOT not set (munit)"
+[[ -n "${MU_SLAVE_RESULTS_ROOT}" ]] || die "Env variable MU_MASTER_SLAVE_ROOT not set (munit)"
+[[ -n "${MU_LOG}" ]] || die "Env variable MU_LOG not set (munit)"
+[[ -n "${MU_MASTER_HOST}" ]] || die "Env variable MU_MASTER_HOST not set (munit)"
+[[ -n "${MU_SLAVE_HOST}" ]] || die "Env variable MU_SLAVE_HOST not set (munit)"
+[[ -n "${MU_MUNIT_ROOT}" ]] || die "Env variable MU_MUNIT_ROOT not set (munit)"
+[[ -n "${MU_TMP}" ]] || die "Env variable MU_TMP not set (munit)"
+[[ -d "${MU_TEST_DEFS}" ]] || die "Env variable MU_TEST_DEFS not a directory (munit)"
+[[ -d "${MU_LIB}" ]] || die "Env variable MU_LIB not a directory (munit)"
+[[ -d "${MU_CTL}" ]] || die "Env variable MU_CTL not a directory (munit)"
+[[ -n "${MU_MUSE_MAP}" ]] || die "Env variable MU_MUSE_MAP not set (munit)"
+[[ -n "${MU_MUNIT_MAP}" ]] || die "Env variable MU_MUNIT_MAP not set (munit)"
+[[ -n "${MU_TEST_LOG}" ]] || die "Env variable MU_TEST_LOG not set (munit)"
+
+#======================================
+# Logging
+#======================================
+[[ -d $(dirname "${MU_LOG}") ]] || die "Log directory does not exist. ($(dirname ${MU_LOG})) Failed install? (munit)"
+[[ -w $(dirname "${MU_LOG}") ]] || die "Log directory $(dirname ${MU_LOG})) is not writable. Failed install? (munit)"
+if [[ -f "${MU_LOG}" ]] 
+then
+    [[ -w "${MU_LOG}" ]] || die "Log (${MU_LOG}) is not writable. Failed install? (munit)"
+else
+    :>"${MU_LOG}" || die "Log (${MU_LOG}) is not writable. Failed install? (munit)"
+fi
+
+#======================================
+# Create a unique RUN ID
+#======================================
+MU_RUNID=$(date +"%Y%m%d%H%M%S")
+mu_log_line "Starting test run - (${MU_RUNID})"
+
+#======================================
+# Is MUSE installed 
+#======================================
+which muse > /dev/null 2>&1 || die "MUSE must be installed prior to running MUNIT (munit)"
+[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "MUSE found installed" "INFO"
+
+#======================================
+# Validate the command line
+#======================================
+validate_cmd_line "$@"
+[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Command line validated ($@)" "INFO"
+
+#======================================
+# Create the runtime directories
+#======================================
+mkdir -p "${MU_TMP}"
+[[ -d "${MU_TMP}" ]] || die "Failed to cretae MUNIT TMP directory (${MU_TMP}) (munit)"
+
+#======================================
+# Create the map files
+#======================================
+find "${MU_MUSE_DEV_ROOT}" -type f > "${MU_MUSE_MAP}" 2>/dev/null || die "Find failed for (${MU_MUSE_DEV_ROOT}) (munit)"
+find "${MU_MUSE_ROOT}" -type f >> "${MU_MUSE_MAP}" 2>/dev/null || die "Find failed for (${MU_MUSE_ROOT}) (munit)"
+find "${MU_MUNIT_ROOT}" -type f > "${MU_MUNIT_MAP}" 2>/dev/null || die "Find failed for (${MU_MUNIT_MAP}) (munit)"
+[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Map files created (${MU_MUNIT_MAP}) (${MU_MUSE_MAP})" "INFO"
+
+#======================================
+# Include the MUNIT libraries
+#======================================
+include assert.mulib
+[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Includes successfully sourced" "INFO"
+
+#======================================
+# 
+#======================================
+
+
+
+if assert_equal_string "AA" "AB"
+then
+    echo "Equal"
+else
+    echo "not equal"
+fi
+
+
+
+
+
+
+
+
+
+
+

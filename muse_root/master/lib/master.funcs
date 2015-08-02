@@ -1080,7 +1080,7 @@ m_validate_cmd_line()
                     FUNC_FILE=""
                     while read F
                     do
-                        if grep "${1}" "${F}" >/dev/null 2>&1
+                        if egrep "^${1}" "${F}" >/dev/null 2>&1
                         then
                             FUNC_FILE="${F}"
                             break
@@ -1089,6 +1089,11 @@ m_validate_cmd_line()
 
                     if [[ -n "${FUNC_FILE}" ]]
                     then
+                        printf "%s\n" "${C_BREAK}"
+                        printf "%s\n" " Matching files available"
+                        printf "%s\n" "${FUNC_FILE}"
+                        printf "%s\n" "${C_BREAK}"
+                        
                         awk -v p=${1} -v f=1 '
                             ((f == 1) && (NR == FNR) && ($0 ~ /^## Name/) && ($NF == p)) {fs = (NR -2)}
                             ((f == 1) && (NR == FNR) && (fs != 0) && ($0 ~ /^}/)){fe = NR;f = 2}

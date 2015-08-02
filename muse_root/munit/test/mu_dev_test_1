@@ -1,0 +1,60 @@
+##############################################################
+##
+## Name         :   mu_test_assertions
+## Author       :   Bradley Atkins
+## Description  :   Dev test suite for developing MUNIT
+## Date         :   02/08/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## This program is free software; you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, version 2 only.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program; if not, write to the Free Software
+## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
+## USA
+##
+##############################################################
+
+#======================================
+# Test string equality
+#======================================
+def TestEqualStringLiterals
+    assert_equal_string "str1" "str1"
+end
+
+def TestEqualStringLiteralAndVar
+    STR1="str1"
+    assert_equal_string "str1" "${STR1}"
+end
+
+def TestUnequalStringsFail
+    assert_equal_string "str1" "str2"
+end
+
+def TestUnequalStringsWithFailMsg
+    assert_equal_string "str1" "str2" "str1 and str2 - not equal strings"
+end
+
+#======================================
+# Expected result
+# tests(4), assertions(4), failures(2), errors(0)
+# Failures:
+# 1) mu_test_assertions.TestUnequalStringsFail
+#   <str1> expected but got <str2>
+# 2) mu_test_assertions.TestUnequalStringsWithFailMsg
+#   str1 and str2 - not equal strings
+#   <str1> expected but got <str2>
+#
+#======================================
+
+
+
