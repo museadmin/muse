@@ -43,7 +43,6 @@ end
 def TestUnequalStringsWithFailMsg
     assert_equal_string "str1" "str2" "str1 and str2 - not equal strings"
 end
-
 #======================================
 # Expected result
 # tests(4), assertions(4), failures(2), errors(0)

@@ -79,6 +79,12 @@ set -a
     MU_CMD_LINE=""
     MU_TEST_NAMES=""
 
+    TMPFIL1=""
+    TMPFILE2=""
+    TMPFILE3=""
+
+    TESTFILE=""
+
 ##############################################################
 ##
 ## Name         :   usage
@@ -98,7 +104,6 @@ usage()
     printf "\t%s\n" "${0##*/} -a|--all              :Archive tagged results"
 
 }
-
 ##############################################################
 ##
 ## Name         :   mu_find_file
@@ -143,7 +148,6 @@ mu_find_file()
         done < "${MAP}"
     done
 }
-
 ##############################################################
 ##
 ## Name         :   include
@@ -168,7 +172,6 @@ include()
     [[ -r "${FILE}" ]] || die "Include library (${FILE}) not a readable file (${FUNCNAME})"
     source "${FILE}" || die "Include failed for library (${FILE}) (${FUNCNAME})"
 }
-
 ##############################################################
 ##
 ## Name         :   mu_get_tmp_file
@@ -212,19 +215,30 @@ mu_clean_file()
 {
     [[ $# -eq 2 ]] || die "Error: Usage args (${FUNCNAME})"
 
-    if [[ "${1}" == "${2}" ]] 
+    local SRC="${1}" DST="${2}"
+
+    #======================================
+    # Name can be basename or FQN. If base 
+    # then find it
+    #======================================
+    [[ -f "${1}" ]] || mu_find_file "${1}" SRC MUNIT
+    [[ -f "${2}" ]] || mu_find_file "${2}" DST MUNIT
+
+    #======================================
+    # Clean the file of comments etc.
+    #======================================
+    if [[ "${SRC}" == "${DST}" ]] 
     then
         local FILE
         mu_get_tmp_file ${FUNCNAME} FILE 
-        sed 's/[#].*$//g' "${1}" | awk NF > "${FILE}"
+        sed 's/[#].*$//g' "${SRC}" | awk NF > "${FILE}"
         for s in ${PIPESTATUS[@]}; do [[ $s -eq 0 ]] || die "Error:Pipe failed 1 (${FUNCNAME})" ; done 
-        mv "${FILE}" > "${1}" || die "Failed to overwrite target file (${2}) (${FUNCNAME})"
+        mv "${FILE}" > "${SRC}" || die "Failed to overwrite target file (${DST}) (${FUNCNAME})"
     else
-        sed 's/[#].*$//g' "${1}" | awk NF > "${2}" || die "Failed to overwrite target file (${2}) (${FUNCNAME})"
+        sed 's/[#].*$//g' "${SRC}" | awk NF > "${DST}" || die "Failed to overwrite target file (${DST}) (${FUNCNAME})"
         for s in ${PIPESTATUS[@]}; do [[ $s -eq 0 ]] || die "Error:Pipe failed 2 (${FUNCNAME})" ; done 
     fi
 }
-
 ##############################################################
 ##
 ## Name         :   validate_cmd_line
@@ -244,8 +258,9 @@ validate_cmd_line()
     do
         case ${1} in
             -a|--all)
+                
+                [[ $# -gt 1 ]] && die "Usage. Option (${1}) requires no arguments"
                 shift
-                [[ $# -gt 0 ]] || die "Usage. Option all requires no arguments"
 
                 #======================================
                 # User wants to run all tests
@@ -275,7 +290,6 @@ validate_cmd_line()
         mu_find_file "${FILE}" FILE
     done
 }
-
 ##############################################################
 ##
 ## Name         :   mu_log_line
@@ -294,6 +308,53 @@ mu_log_line()
 
     echo "$(date): ${2}: ${1}" >> "${MU_LOG}" || die "Failed to write to log"
 }
+##############################################################
+##
+## Name         :   mu_create_map_files
+## Author       :   Bradley Atkins
+## Description  :   Create the map files for MUSE and MUNIT
+## Date         :   02/08/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+mu_create_map_files()
+{
+    find "${MU_MUSE_DEV_ROOT}" -type f > "${MU_MUSE_MAP}" 2>/dev/null || die "Find failed for (${MU_MUSE_DEV_ROOT}) (munit)"
+    find "${MU_MUSE_ROOT}" -type f >> "${MU_MUSE_MAP}" 2>/dev/null || die "Find failed for (${MU_MUSE_ROOT}) (munit)"
+    find "${MU_MUNIT_ROOT}" -type f > "${MU_MUNIT_MAP}" 2>/dev/null || die "Find failed for (${MU_MUNIT_MAP}) (munit)"
+}
+##############################################################
+##
+## Name         :   mu_check_test_suite_format
+## Author       :   Bradley Atkins
+## Description  :   Basic sanity checks on file format
+## Date         :   02/08/2015
+## Args         :   1 - Test file
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+mu_check_test_suite_format()
+{
+    [[ -r "${1}" ]] || die "Usage. Arg[1]. Test file expected (${FUNCNAME})"
 
+    local LINE= EXP="def"
+    #======================================
+    # Correct sequence of def - end pairs?
+    #======================================
+    [[ $(egrep "^def" "${1}" | wc -l) -eq $(egrep "^end" "${1}" | wc -l) ]] || die "Unequal number of \"def\" \"end\" pairs in (${1}) (${FUNCNAME})"
+    for LINE in $(egrep "^def|^end" "${1}" | cut -d" " -f1)
+    do
+        [[ "${LINE}" == "${EXP}" ]] || die "Sequence of \"def\" \"end\" pairs failed (${FUNCNAME})"
+        if [[ "${EXP}" == "def" ]]
+        then
+            EXP="end"
+        else
+            EXP="def"
+        fi
+    done
+}
 
 set +a
