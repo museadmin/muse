@@ -27,35 +27,224 @@
 
 ##############################################################
 ##
+## Name         :   raise_error
+## Author       :   Bradley Atkins
+## Description  :   Raise an error
+## Date         :   04/08/2015
+## Args         :   1 - MSG
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+raise_error()
+{
+    MU_ERRORS=$(( MU_ERRORS +1 ))
+    printf "\n\t$(( MU_ERROR_INDEX += 1 )) - %s\n" ${THIS_TEST_NAME} 
+    printf "\t\t%s\n" "${1}" 
+} >> "${MU_TEST_BUF}"
+##############################################################
+##
+## Name         :   raise_failure
+## Author       :   Bradley Atkins
+## Description  :   Raise a failure
+## Date         :   04/08/2015
+## Args         :   1 - MSG
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+raise_failure()
+{
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n" "${1}" 
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+
+##############################################################
+##
 ## Name         :   assert_equal_string
 ## Author       :   Bradley Atkins
 ## Description  :   Test two strings for equality
 ## Date         :   02/08/2015
-## Args         :   1 - Expected String
-##                  2 - String under test
+## Args         :   1 - <Expected String>
+##                  2 - <String under test>
+##                  3 - [Err msg]
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
 ##############################################################
 assert_equal_string()
 {
-    [[ "${1}" == "${2}" ]] || return 1
-    return 0
-}
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    [[ "${1}" == "${2}" ]] && return 0
+    
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "Expected (${1}) == (${2}) but got (${1}) != (${2})" "${3}"
+
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_not_equal_string
 ## Author       :   Bradley Atkins
 ## Description  :   Test two strings for inequality
 ## Date         :   02/08/2015
-## Args         :   1 - Expected String
-##                  2 - String under test
+## Args         :   1 - <Expected String>
+##                  2 - <String under test>
+##                  3 - [Err msg]
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
 ##############################################################
 assert_not_equal_string()
 {
-    [[ "${1}" != "${2}" ]] || return 1
-    return 0
-}
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    [[ "${1}" != "${2}" ]] && return 0
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "Expected (${1}) != (${2}) but got (${1}) == (${2})" "${3}"
+    
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+
+##############################################################
+##
+## Name         :   assert_equal_integer
+## Author       :   Bradley Atkins
+## Description  :   Test two integers for equality
+## Date         :   04/08/2015
+## Args         :   1 - <expected integer>
+##                  2 - <Integer under test>
+##                  3 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_equal_integer()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    [[ "${1}" -eq "${2}" ]] && return 0
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "Expected (${1}) == (${2}) but got (${1}) != (${2})" "${3}"
+    
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+##############################################################
+##
+## Name         :   assert_not_equal_integer
+## Author       :   Bradley Atkins
+## Description  :   Test two integers for inequality
+## Date         :   04/08/2015
+## Args         :   1 - <expected integer>
+##                  2 - <Integer under test>
+##                  3 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_not_equal_integer()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    [[ ${1} -ne ${2} ]] && return 0
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "Expected (${1}) != (${2}) but got (${1}) == (${2})" "${3}"
+    
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+##############################################################
+##
+## Name         :   assert_greater_than_integer
+## Author       :   Bradley Atkins
+## Description  :   Test integer is greater
+## Date         :   04/08/2015
+## Args         :   1 - <expected integer>
+##                  2 - <Integer under test>
+##                  3 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_greater_than_integer()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    [[ ${2} -gt ${1} ]] && return 0
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "Expected (${2}) > (${1}) but got (${2}) <= (${1})" "${3}"
+    
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+##############################################################
+##
+## Name         :   assert_less_than_integer
+## Author       :   Bradley Atkins
+## Description  :   Test integer is smaller
+## Date         :   04/08/2015
+## Args         :   1 - <expected integer>
+##                  2 - <Integer under test>
+##                  3 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_less_than_integer()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    [[ ${2} -lt ${1} ]] && return 0
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "Expected (${2}) < (${1}) but got (${2}) >= (${1})" "${3}"
+    
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+
+
+##############################################################
+##
+## Name         :   assert_less_than_float
+## Author       :   Bradley Atkins
+## Description  :   Test float is smaller
+## Date         :   04/08/2015
+## Args         :   1 - <expected float>
+##                  2 - <float under test>
+##                  3 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_less_than_float()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    (( $(echo "${2} < ${1}" | bc -l) )) && return 0
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "Expected (${2}) < (${1}) but got (${2}) >= (${1})" "${3}"
+    
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+##############################################################
+##
+## Name         :   assert_greater_than_float
+## Author       :   Bradley Atkins
+## Description  :   Test float is smaller
+## Date         :   04/08/2015
+## Args         :   1 - <expected float>
+##                  2 - <float under test>
+##                  3 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_greater_than_float()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    (( $(echo "${2} > ${1}" | bc -l) )) && return 0
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "Expected (${2}) > (${1}) but got (${2}) <= (${1})" "${3}"
+    
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+
+

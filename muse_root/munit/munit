@@ -79,8 +79,8 @@ die()
 #======================================
 
 source ./munit_bootstrap
-[[ -d "${MU_MUSE_ROOT}" ]] || die "Env variable MU_MUSE_ROOT not a directory (munit)"
-[[ -d "${MU_MUSE_DEV_ROOT}" ]] || die "Env variable MU_MUSE_DEV_ROOT not a directory (munit)"
+#[[ -d "${MU_MUSE_ROOT}" ]] || die "Env variable MU_MUSE_ROOT not a directory (munit)"
+#[[ -d "${MU_MUSE_DEV_ROOT}" ]] || die "Env variable MU_MUSE_DEV_ROOT not a directory (munit)"
 [[ -n "${MU_MASTER_RESULTS_ROOT}" ]] || die "Env variable MU_MASTER_RESULTS_ROOT not set (munit)"
 [[ -n "${MU_SLAVE_RESULTS_ROOT}" ]] || die "Env variable MU_MASTER_SLAVE_ROOT not set (munit)"
 [[ -n "${MU_LOG}" ]] || die "Env variable MU_LOG not set (munit)"
@@ -94,6 +94,8 @@ source ./munit_bootstrap
 [[ -n "${MU_MUSE_MAP}" ]] || die "Env variable MU_MUSE_MAP not set (munit)"
 [[ -n "${MU_MUNIT_MAP}" ]] || die "Env variable MU_MUNIT_MAP not set (munit)"
 [[ -n "${MU_TEST_LOG}" ]] || die "Env variable MU_TEST_LOG not set (munit)"
+[[ -n "${MU_TEST_BUF}" ]] || die "Env variable MU_TEST_BUF not set (munit)"
+[[ -n "${MU_ERROR_BUF}" ]] || die "Env variable MU_ERROR_BUF not set (munit)"
 
 #======================================
 # Logging
@@ -116,7 +118,7 @@ mu_log_line "Starting test run - (${MU_RUNID})"
 #======================================
 # Is MUSE installed 
 #======================================
-which muse > /dev/null 2>&1 || die "MUSE must be installed prior to running MUNIT (munit)"
+which "${MU_SUT}" > /dev/null 2>&1 || die "${MU_SUT} must be installed prior to running MUNIT (munit)"
 [[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "MUSE found installed" "INFO"
 
 #======================================
@@ -130,6 +132,7 @@ validate_cmd_line "$@"
 #======================================
 mkdir -p "${MU_TMP}"
 [[ -d "${MU_TMP}" ]] || die "Failed to cretae MUNIT TMP directory (${MU_TMP}) (munit)"
+rm -rf "${MU_TMP}"/* || die "Cleardown of (${MU_TMP}) failed"
 
 #======================================
 # Create the map files
@@ -144,48 +147,65 @@ include assert.mulib
 [[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Includes successfully sourced" "INFO"
 
 #======================================
-# Loop through all test suites
+# Parse the test suites and break out
+# each test into its own exe
 #======================================
-for TEST_SUITE in ${MU_TEST_NAMES}
+mu_create_test_files
+
+#======================================
+# Run each test and create each report
+#======================================
+printf "%s\n" "Errors:" > "${MU_TEST_BUF}"
+MU_ERROR_INDEX=0
+
+MU_RUN_INDEX=0
+while [[ $(( MU_RUN_INDEX += 1 )) -le ${MU_NUM_TESTS} ]]
 do
-    mu_find_file "${TEST_SUITE}" TMPFILE1
-
-    #======================================
-    # Prepare and sanity check test file
-    #======================================
-    mu_get_tmp_file main TESTSUITE
-    mu_clean_file "${TMPFILE1}" "${TESTSUITE}"
-    mu_check_test_suite_format "${TESTSUITE}"
-
-    #======================================
-    # Loop through all tests within suite
-    # and create a bash script for each one
-    # SUITE_NAME.TEST_NAME.tst in MU_TMP
-    # Add name to run array
-    # Copy test lines into file with #!
-    # Move this into a function and call it
-    #======================================
-    while read LINE
-    do
-        if [[ "${LINE}" =~ "^TEST=" ]] 
-        then
-
-        fi
-        printf "%s\n" "$LINE"
-    done < <( awk '/^def/{printf "%s%s\n", "TEST=", $2;next}
-                    !/^end/{printf "%s\n", $0}
-                        ' FS=" " "${TESTSUITE}")
+    MU_TESTS=$(( MU_TESTS +1 ))
+    THISTEST=${MU_RUN_ORDER[$MU_RUN_INDEX]}
+    if ! source "${MU_TMP}/${THISTEST}" 2> "${MU_ERROR_BUF}"
+    then
+        MU_ERRORS=$(( MU_ERRORS +1 ))
+        printf "\n\t$(( MU_ERROR_INDEX += 1 )) - %s\n" "${MU_RUN_ORDER[$MU_RUN_INDEX]}" >> "${MU_TEST_BUF}"
+        while read LINE
+        do
+            printf "\t\t%s\n" "${LINE}" >> "${MU_TEST_BUF}"
+        done < "${MU_ERROR_BUF}"
+    fi
 done
 
 
+#======================================
+# Concat all of the reports into one
+#======================================
+printf "%s\n" "=====================================================================" > "${MU_TEST_LOG}"
+printf "\t%s\n" "$(date): Test Report for (${MU_SUT})" >> "${MU_TEST_LOG}"
+printf "\t%s\n" "(${MU_NUM_TESTS}) Tests, (${MU_ASSERTIONS}) Assertions, (${MU_FAILURES}) Failures. (${MU_ERRORS}) Errors" >> "${MU_TEST_LOG}"
+printf "%s\n" "=====================================================================" >> "${MU_TEST_LOG}"
+[[ ${MU_FAILURES} -gt 0 ]] && printf "%s\n" "Failures:" >> "${MU_TEST_LOG}"
 
+MU_FAIL_INDEX=0
+MU_RUN_INDEX=0
+while [[ $(( MU_RUN_INDEX += 1 )) -le ${MU_NUM_TESTS} ]]
+do
+    THISRPT="${MU_TMP}/${MU_RUN_ORDER[$MU_RUN_INDEX]}.rpt"
+    if [[ -s "${THISRPT}" ]]
+    then
+        printf "\n\t$(( MU_FAIL_INDEX += 1 )) - %s\n" "${MU_RUN_ORDER[$MU_RUN_INDEX]}" >> "${MU_TEST_LOG}"
+        while read LINE
+        do
+            printf "\t\t%s\n" "${LINE}" >> "${MU_TEST_LOG}"
+        done < "${THISRPT}"
+    fi
+done
+printf "\n" >> "${MU_TEST_LOG}"
 
-
-
-
-
-
-
+#======================================
+# Display the test log
+#======================================
+[[ ${MU_ERRORS} -gt 0 ]] && grep -v -A1 '^[[:blank:]]*$' "${MU_TEST_BUF}" | grep -v '^--$' >> "${MU_TEST_LOG}"
+grep -v -A1 '^[[:blank:]]*$' "${MU_TEST_LOG}" | grep -v '^--$'
+printf "%s\n" "====================================================================="
 
 
 

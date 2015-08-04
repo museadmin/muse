@@ -1,6 +1,6 @@
 ##############################################################
 ##
-## Name         :   mu_test_assertions
+## Name         :   mu_test_floats
 ## Author       :   Bradley Atkins
 ## Description  :   Dev test suite for developing MUNIT
 ## Date         :   02/08/2015
@@ -25,35 +25,20 @@
 ##############################################################
 
 #======================================
-# Test string equality
+# Test floating point comparisons
 #======================================
-def TestEqualStringLiterals
-    assert_equal_string "str1" "str1"
+def Test-FloatLessThan-True
+    assert_less_than_float "1.9" "1.8" "1.8 should test less than 1.9"
 end
 
-def TestEqualStringLiteralAndVar
-    STR1="str1"
-    assert_equal_string "str1" "${STR1}"
+def Test-FloatLessThan-False
+    assert_less_than_float "1.8" "1.9" "Test should fail as 1.9 > 1.8"
 end
 
-def TestUnequalStringsFail
-    assert_equal_string "str1" "str2"
+def Test-FloatGreaterThan-True
+    assert_greater_than_float "1.8" "1.9" "Test should pass as 1.9 > 1.8"
 end
 
-def TestUnequalStringsWithFailMsg
-    assert_equal_string "str1" "str2" "str1 and str2 - not equal strings"
+def Test-FloatGreaterThan-False
+    assert_greater_than_float "1.9" "1.9" "Test should fail as 1.9 == 1.9"
 end
-#======================================
-# Expected result
-# tests(4), assertions(4), failures(2), errors(0)
-# Failures:
-# 1) mu_test_assertions.TestUnequalStringsFail
-#   <str1> expected but got <str2>
-# 2) mu_test_assertions.TestUnequalStringsWithFailMsg
-#   str1 and str2 - not equal strings
-#   <str1> expected but got <str2>
-#
-#======================================
-
-
-
