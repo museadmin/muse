@@ -78,20 +78,13 @@ die()
 # Bootstrap
 #======================================
 
-source ./munit_bootstrap
-#[[ -d "${MU_MUSE_ROOT}" ]] || die "Env variable MU_MUSE_ROOT not a directory (munit)"
-#[[ -d "${MU_MUSE_DEV_ROOT}" ]] || die "Env variable MU_MUSE_DEV_ROOT not a directory (munit)"
-[[ -n "${MU_MASTER_RESULTS_ROOT}" ]] || die "Env variable MU_MASTER_RESULTS_ROOT not set (munit)"
-[[ -n "${MU_SLAVE_RESULTS_ROOT}" ]] || die "Env variable MU_MASTER_SLAVE_ROOT not set (munit)"
+source $(dirname $0)/ctl/munit_bootstrap
 [[ -n "${MU_LOG}" ]] || die "Env variable MU_LOG not set (munit)"
-[[ -n "${MU_MASTER_HOST}" ]] || die "Env variable MU_MASTER_HOST not set (munit)"
-[[ -n "${MU_SLAVE_HOST}" ]] || die "Env variable MU_SLAVE_HOST not set (munit)"
 [[ -n "${MU_MUNIT_ROOT}" ]] || die "Env variable MU_MUNIT_ROOT not set (munit)"
 [[ -n "${MU_TMP}" ]] || die "Env variable MU_TMP not set (munit)"
 [[ -d "${MU_TEST_DEFS}" ]] || die "Env variable MU_TEST_DEFS not a directory (munit)"
 [[ -d "${MU_LIB}" ]] || die "Env variable MU_LIB not a directory (munit)"
 [[ -d "${MU_CTL}" ]] || die "Env variable MU_CTL not a directory (munit)"
-[[ -n "${MU_MUSE_MAP}" ]] || die "Env variable MU_MUSE_MAP not set (munit)"
 [[ -n "${MU_MUNIT_MAP}" ]] || die "Env variable MU_MUNIT_MAP not set (munit)"
 [[ -n "${MU_TEST_LOG}" ]] || die "Env variable MU_TEST_LOG not set (munit)"
 [[ -n "${MU_TEST_BUF}" ]] || die "Env variable MU_TEST_BUF not set (munit)"
@@ -113,19 +106,7 @@ fi
 # Create a unique RUN ID
 #======================================
 MU_RUNID=$(date +"%Y%m%d%H%M%S")
-mu_log_line "Starting test run - (${MU_RUNID})"
-
-#======================================
-# Is MUSE installed 
-#======================================
-which "${MU_SUT}" > /dev/null 2>&1 || die "${MU_SUT} must be installed prior to running MUNIT (munit)"
-[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "MUSE found installed" "INFO"
-
-#======================================
-# Validate the command line
-#======================================
-validate_cmd_line "$@"
-[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Command line validated ($@)" "INFO"
+mu_log_line "Starting test run - (${MU_RUNID})" "INFO"
 
 #======================================
 # Create the runtime directories
@@ -138,9 +119,15 @@ rm -rf "${MU_TMP}"/* || die "Cleardown of (${MU_TMP}) failed"
 # Create the map files
 #======================================
 mu_create_map_files
-[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Map files created (${MU_MUNIT_MAP}) (${MU_MUSE_MAP})" "INFO"
+[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Map file created (${MU_MUNIT_MAP})" "INFO"
 
 #======================================
+# Validate the command line
+#======================================
+validate_cmd_line "$@"
+[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Command line validated ($@)" "INFO"
+
+#=====================================
 # Include the MUNIT libraries
 #======================================
 include assert.mulib
@@ -151,10 +138,12 @@ include assert.mulib
 # each test into its own exe
 #======================================
 mu_create_test_files
+[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Test files created" "INFO"
 
 #======================================
 # Run each test and create each report
 #======================================
+[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Running Tests" "INFO"
 printf "%s\n" "Errors:" > "${MU_TEST_BUF}"
 MU_ERROR_INDEX=0
 
@@ -174,12 +163,12 @@ do
     fi
 done
 
-
 #======================================
 # Concat all of the reports into one
 #======================================
+[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Compiling reports" "INFO"
 printf "%s\n" "=====================================================================" > "${MU_TEST_LOG}"
-printf "\t%s\n" "$(date): Test Report for (${MU_SUT})" >> "${MU_TEST_LOG}"
+printf "\t%s\n" "$(date): MUNIT Test Report" >> "${MU_TEST_LOG}"
 printf "\t%s\n" "(${MU_NUM_TESTS}) Tests, (${MU_ASSERTIONS}) Assertions, (${MU_FAILURES}) Failures. (${MU_ERRORS}) Errors" >> "${MU_TEST_LOG}"
 printf "%s\n" "=====================================================================" >> "${MU_TEST_LOG}"
 [[ ${MU_FAILURES} -gt 0 ]] && printf "%s\n" "Failures:" >> "${MU_TEST_LOG}"
@@ -200,6 +189,7 @@ do
 done
 printf "\n" >> "${MU_TEST_LOG}"
 
+
 #======================================
 # Display the test log
 #======================================
@@ -207,5 +197,6 @@ printf "\n" >> "${MU_TEST_LOG}"
 grep -v -A1 '^[[:blank:]]*$' "${MU_TEST_LOG}" | grep -v '^--$'
 printf "%s\n" "====================================================================="
 
+[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Run complete for - (${MU_RUNID})" "INFO"
 
 
