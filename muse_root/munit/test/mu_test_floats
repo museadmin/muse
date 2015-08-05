@@ -27,18 +27,36 @@
 #======================================
 # Test floating point comparisons
 #======================================
+## Float = ref - Pass
+def Test-FloatEqual-True
+    assert_equal_float "1.235" "01.235" "Test should have passed"
+end
+## Float = ref - Fail
+def Test-FloatEqual-Fail
+    assert_equal_float "1.235" "02.235" "Fail because unequal"
+end
+## Float != ref - Pass
+def Test-FloatNotEqual-True
+    assert_not_equal_float "2.235" "01.235" "Test should have passed"
+end
+## Float != ref - Fail
+def Test-FloatNotEqual-Fail
+    assert_not_equal_float "1.235" "01.235" "Fail because equal"
+end
+## Float < ref - Pass
 def Test-FloatLessThan-True
     assert_less_than_float "1.9" "1.8" "1.8 should test less than 1.9"
 end
-
+## Float < ref - Fail
 def Test-FloatLessThan-False
     assert_less_than_float "1.8" "1.9" "Test should fail as 1.9 > 1.8"
 end
-
+## Float > ref - Pass
 def Test-FloatGreaterThan-True
     assert_greater_than_float "1.8" "1.9" "Test should pass as 1.9 > 1.8"
 end
-
+## Float > ref - Fail
 def Test-FloatGreaterThan-False
     assert_greater_than_float "1.9" "1.9" "Test should fail as 1.9 == 1.9"
 end
+

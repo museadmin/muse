@@ -1,7 +1,7 @@
 #! /bin/bash
 ##############################################################
 ##
-## Name         :   assert.mulib
+## Name         :   assert-file.funcs
 ## Author       :   Bradley Atkins
 ## Description  :   MUNIT test assertions library
 ## Date         :   02/08/2015
@@ -27,223 +27,268 @@
 
 ##############################################################
 ##
-## Name         :   raise_error
+## Name         :   assert_file_exists
 ## Author       :   Bradley Atkins
-## Description  :   Raise an error
+## Description  :   Test file exists
 ## Date         :   04/08/2015
-## Args         :   1 - MSG
+## Args         :   1 - File
+##                  2 - [Err msg]
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
 ##                  Disabled    [n]
 ##############################################################
-raise_error()
-{
-    MU_ERRORS=$(( MU_ERRORS +1 ))
-    printf "\n\t$(( MU_ERROR_INDEX += 1 )) - %s\n" ${THIS_TEST_NAME} 
-    printf "\t\t%s\n" "${1}" 
-} >> "${MU_TEST_BUF}"
-##############################################################
-##
-## Name         :   raise_failure
-## Author       :   Bradley Atkins
-## Description  :   Raise a failure
-## Date         :   04/08/2015
-## Args         :   1 - MSG
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##                  Disabled    [n]
-##############################################################
-raise_failure()
-{
-    MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n" "${1}" 
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
-
-##############################################################
-##
-## Name         :   assert_equal_string
-## Author       :   Bradley Atkins
-## Description  :   Test two strings for equality
-## Date         :   02/08/2015
-## Args         :   1 - <Expected String>
-##                  2 - <String under test>
-##                  3 - [Err msg]
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##############################################################
-assert_equal_string()
+assert_file_exists()
 {
     MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
-    [[ "${1}" == "${2}" ]] && return 0
-    
-    MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${1}) == (${2}) but got (${1}) != (${2})" "${3}"
-
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
-##############################################################
-##
-## Name         :   assert_not_equal_string
-## Author       :   Bradley Atkins
-## Description  :   Test two strings for inequality
-## Date         :   02/08/2015
-## Args         :   1 - <Expected String>
-##                  2 - <String under test>
-##                  3 - [Err msg]
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##############################################################
-assert_not_equal_string()
-{
-    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
-    [[ "${1}" != "${2}" ]] && return 0
+    [[ -e "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${1}) != (${2}) but got (${1}) == (${2})" "${3}"
-    
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
-
-##############################################################
-##
-## Name         :   assert_equal_integer
-## Author       :   Bradley Atkins
-## Description  :   Test two integers for equality
-## Date         :   04/08/2015
-## Args         :   1 - <expected integer>
-##                  2 - <Integer under test>
-##                  3 - [Err msg]
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##                  Disabled    [n]
-##############################################################
-assert_equal_integer()
-{
-    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
-    [[ "${1}" -eq "${2}" ]] && return 0
-
-    MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${1}) == (${2}) but got (${1}) != (${2})" "${3}"
+    printf "%s\n%s\n" "Expected file (${1}) not found" "${2}"
     
 } > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
-## Name         :   assert_not_equal_integer
+## Name         :   assert_regular_file_exists
 ## Author       :   Bradley Atkins
-## Description  :   Test two integers for inequality
+## Description  :   Test regular file exists
 ## Date         :   04/08/2015
-## Args         :   1 - <expected integer>
-##                  2 - <Integer under test>
-##                  3 - [Err msg]
+## Args         :   1 - File
+##                  2 - [Err msg]
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
 ##                  Disabled    [n]
 ##############################################################
-assert_not_equal_integer()
+assert_regular_file_exists()
 {
     MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
-    [[ ${1} -ne ${2} ]] && return 0
+    [[ -f "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${1}) != (${2}) but got (${1}) == (${2})" "${3}"
+    printf "%s\n%s\n" "Expected file (${1}) not found" "${2}"
     
 } > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
-## Name         :   assert_greater_than_integer
+## Name         :   assert_file_not_zero
 ## Author       :   Bradley Atkins
-## Description  :   Test integer is greater
+## Description  :   Test regular file exists and is not 0 bytes
 ## Date         :   04/08/2015
-## Args         :   1 - <expected integer>
-##                  2 - <Integer under test>
-##                  3 - [Err msg]
+## Args         :   1 - File
+##                  2 - [Err msg]
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
 ##                  Disabled    [n]
 ##############################################################
-assert_greater_than_integer()
+assert_file_not_zero()
 {
     MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
-    [[ ${2} -gt ${1} ]] && return 0
+    [[ -s "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${2}) > (${1}) but got (${2}) <= (${1})" "${3}"
+    printf "%s\n%s\n" "Expected file (${1}) not found or empty" "${2}"
     
 } > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
-## Name         :   assert_less_than_integer
+## Name         :   assert_file_file_is_dir
 ## Author       :   Bradley Atkins
-## Description  :   Test integer is smaller
+## Description  :   Test regular file exists and is a dir
 ## Date         :   04/08/2015
-## Args         :   1 - <expected integer>
-##                  2 - <Integer under test>
-##                  3 - [Err msg]
+## Args         :   1 - File
+##                  2 - [Err msg]
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
 ##                  Disabled    [n]
 ##############################################################
-assert_less_than_integer()
+assert_file_is_dir()
 {
     MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
-    [[ ${2} -lt ${1} ]] && return 0
+    [[ -d "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${2}) < (${1}) but got (${2}) >= (${1})" "${3}"
-    
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
-
-
-##############################################################
-##
-## Name         :   assert_less_than_float
-## Author       :   Bradley Atkins
-## Description  :   Test float is smaller
-## Date         :   04/08/2015
-## Args         :   1 - <expected float>
-##                  2 - <float under test>
-##                  3 - [Err msg]
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##                  Disabled    [n]
-##############################################################
-assert_less_than_float()
-{
-    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
-    (( $(echo "${2} < ${1}" | bc -l) )) && return 0
-
-    MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${2}) < (${1}) but got (${2}) >= (${1})" "${3}"
+    printf "%s\n%s\n" "Expected file (${1}) not a directory" "${2}"
     
 } > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
-## Name         :   assert_greater_than_float
+## Name         :   assert_is_block_device
 ## Author       :   Bradley Atkins
-## Description  :   Test float is smaller
+## Description  :   Test regular file exists and is a dir
 ## Date         :   04/08/2015
-## Args         :   1 - <expected float>
-##                  2 - <float under test>
+## Args         :   1 - File
+##                  2 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_is_block_device()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    [[ -b "${1}" ]] && return 0
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "File under test (${1}) is not a block device" "${2}"
+    
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+##############################################################
+##
+## Name         :   assert_is_character_device
+## Author       :   Bradley Atkins
+## Description  :   Test file exists and is a character device
+## Date         :   04/08/2015
+## Args         :   1 - File
+##                  2 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_is_character_device()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    [[ -c "${1}" ]] && return 0
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "File under test (${1}) is not a character device" "${2}"
+    
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+##############################################################
+##
+## Name         :   assert_is_named_pipe
+## Author       :   Bradley Atkins
+## Description  :   Test file exists and is a named pipe
+## Date         :   04/08/2015
+## Args         :   1 - File
+##                  2 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_is_named_pipe()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    [[ -p "${1}" ]] && return 0
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "File under test (${1}) is not a named pipe" "${2}"
+    
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+##############################################################
+##
+## Name         :   assert_is_symbolic_link
+## Author       :   Bradley Atkins
+## Description  :   Test file exists and is a symbolic link
+## Date         :   04/08/2015
+## Args         :   1 - File
+##                  2 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_is_symbolic_link()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    [[ -h "${1}" ]] && return 0
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "File under test (${1}) is not a symbolic link" "${2}"
+    
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+##############################################################
+##
+## Name         :   assert_is_symbolic_link
+## Author       :   Bradley Atkins
+## Description  :   Test file exists and is a symbolic link
+## Date         :   04/08/2015
+## Args         :   1 - File
+##                  2 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_is_symbolic_link()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    [[ -h "${1}" ]] && return 0
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "File under test (${1}) is not a symbolic link" "${2}"
+    
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+##############################################################
+##
+## Name         :   assert_is_a_terminal
+## Author       :   Bradley Atkins
+## Description  :   Test file exists and is a terminal
+## Date         :   04/08/2015
+## Args         :   1 - File
+##                  2 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_is_a_terminal()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    [[ -t "${1}" ]] && return 0
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "File under test (${1}) is not a terminal" "${2}"
+    
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+##############################################################
+##
+## Name         :   assert_is_older_than
+## Author       :   Bradley Atkins
+## Description  :   Test file is older than ref
+## Date         :   04/08/2015
+## Args         :   1 - <reference file>
+##                  2 - <file under test>
 ##                  3 - [Err msg]
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
 ##                  Disabled    [n]
 ##############################################################
-assert_greater_than_float()
+assert_is_older_than()
 {
     MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
-    (( $(echo "${2} > ${1}" | bc -l) )) && return 0
+    [[ "${2}" -ot "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${2}) > (${1}) but got (${2}) <= (${1})" "${3}"
+    printf "%s\n%s\n" "Expected (${2}) older than (${1}) but got (${2}) newer than (${1})" "${3}"
+    
+} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+##############################################################
+##
+## Name         :   assert_is_newer_than
+## Author       :   Bradley Atkins
+## Description  :   Test file is newer than ref
+## Date         :   04/08/2015
+## Args         :   1 - <reference file>
+##                  2 - <file under test>
+##                  3 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_is_newer_than()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    [[ "${2}" -nt "${1}" ]] && return 0
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n" "Expected (${2}) newer than (${1}) but got (${2}) older than (${1})" "${3}"
     
 } > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 

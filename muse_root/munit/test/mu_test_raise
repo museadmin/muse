@@ -27,18 +27,19 @@
 #======================================
 # Test raise capability
 #======================================
+## Raise a fail
 def Test-RaiseFailure
     raise_failure
 end
-
+## Raise a fail with a msg
 def Test-RaiseFailureWithMsg
     raise_failure "This is a raised failure"
 end
-
+## Raise an error
 def Test-RaiseError
     raise_error
 end
-
+## Raise an error with a msg
 def Test-RaiseErrorWithMsg
     raise_error "This is a raised error"
 end

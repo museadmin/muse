@@ -130,7 +130,11 @@ validate_cmd_line "$@"
 #=====================================
 # Include the MUNIT libraries
 #======================================
-include assert.mulib
+include assert-string.funcs
+include assert-integer.funcs
+include assert-float.funcs
+include assert-file.funcs
+include raise.funcs
 [[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Includes successfully sourced" "INFO"
 
 #======================================

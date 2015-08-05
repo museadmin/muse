@@ -58,6 +58,11 @@ set -a
     MU_ERROR_BUF="${MU_TMP}/mu_error_buf"
 
     #======================================
+    # Global Constants
+    #======================================
+    MC_NAME_SEP="."
+
+    #======================================
     # Runtime vars
     #======================================
     MU_ERRORS=0
@@ -347,6 +352,8 @@ mu_check_test_suite_format()
             EXP="def"
         fi
     done
+
+    [[ "${EXP}" == "def" ]] || die "Test unterminated by def statement"
 }
 ##############################################################
 ##
@@ -361,6 +368,7 @@ mu_check_test_suite_format()
 ##############################################################
 mu_create_test_files()
 {
+    local TEST_SUITE= TMPFILE1= TMPFILE2= LINE= RCNT= UCNT=
     #======================================
     # Loop through all test suites
     #======================================
@@ -371,7 +379,7 @@ mu_create_test_files()
         #======================================
         # Prepare and sanity check test file
         #======================================
-        mu_get_tmp_file main TESTSUITE
+        mu_get_tmp_file "${FUNCNAME}" TESTSUITE
         mu_clean_file "${TMPFILE1}" "${TESTSUITE}"
         mu_check_test_suite_format "${TESTSUITE}"
 
@@ -389,8 +397,9 @@ mu_create_test_files()
             then
                 #======================================
                 # Record the testname in the run array
+                # TODO refactor for project name
                 #======================================
-                TEST_NAME=${TEST_SUITE}.$(echo "${LINE}" | cut -d"=" -f2)
+                TEST_NAME=${TEST_SUITE}${MC_NAME_SEP}$(echo "${LINE}" | cut -d"=" -f2)
                 MU_RUN_ORDER[$(( MU_RUN_INDEX += 1 ))]="${TEST_NAME}"
                 TEST_FILE="${MU_TMP}/${TEST_NAME}"
                 printf "%s\n" "#! /bin/bash" > "${TEST_FILE}"
@@ -404,6 +413,27 @@ mu_create_test_files()
                         !/^end/{printf "%s\n", $0}
                             ' FS=" " "${TESTSUITE}")
     done
+
+    #======================================
+    # Check for duplicate test names
+    #======================================
+    mu_get_tmp_file "${FUNCNAME}2" TMPFILE2
+    for TEST_NAME in ${MU_RUN_ORDER[@]}
+    do
+        echo "${TEST_NAME}" >> "${TMPFILE2}"
+    done
+    RCNT=$(cat "${TMPFILE2}" | wc -l)
+    UCNT=$(sort -u "${TMPFILE2}" | wc -l)
+    if [[ "${RCNT}" -ne "${UCNT}" ]]
+    then
+        echo "==========================================================="
+        echo "Duplicate names in test files"
+        echo "==========================================================="
+        diff <(sort "${TMPFILE2}") <(sort -u "${TMPFILE2}") | sed 's/< //g' | egrep mu_
+        echo "==========================================================="
+        
+        [[ "${RCNT}" -eq "${UCNT}" ]] || die "Duplicate names in test files"
+    fi
 }
 ##############################################################
 ##
