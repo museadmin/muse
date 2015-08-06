@@ -152,6 +152,7 @@ mu_create_test_files
 [[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Running Tests" "INFO"
 printf "%s\n" "Errors:" > "${MU_TEST_BUF}"
 MU_ERROR_INDEX=0
+mu_gen_line "=" "${MU_HEAD_LINE_LEN}" HEADLINE
 
 MU_RUN_INDEX=0
 while [[ $(( MU_RUN_INDEX += 1 )) -le ${MU_NUM_TESTS} ]]
@@ -173,10 +174,11 @@ done
 # Concat all of the reports into one
 #======================================
 [[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Compiling reports" "INFO"
-printf "%s\n" "=====================================================================" > "${MU_TEST_LOG}"
+printf "%s\n" "${HEADLINE}" > "${MU_TEST_LOG}"
 printf "\t%s\n" "$(date): MUNIT Test Report" >> "${MU_TEST_LOG}"
+printf "\t%s\n" "Project - (${MU_CURRENT_PROJECT})" >> "${MU_TEST_LOG}"
 printf "\t%s\n" "(${MU_NUM_TESTS}) Tests, (${MU_ASSERTIONS}) Assertions, (${MU_FAILURES}) Failures. (${MU_ERRORS}) Errors" >> "${MU_TEST_LOG}"
-printf "%s\n" "=====================================================================" >> "${MU_TEST_LOG}"
+printf "%s\n" "${HEADLINE}" >> "${MU_TEST_LOG}"
 [[ ${MU_FAILURES} -gt 0 ]] && printf "%s\n" "Failures:" >> "${MU_TEST_LOG}"
 
 MU_FAIL_INDEX=0
@@ -201,7 +203,8 @@ printf "\n" >> "${MU_TEST_LOG}"
 #======================================
 [[ ${MU_ERRORS} -gt 0 ]] && grep -v -A1 '^[[:blank:]]*$' "${MU_TEST_BUF}" | grep -v '^--$' >> "${MU_TEST_LOG}"
 grep -v -A1 '^[[:blank:]]*$' "${MU_TEST_LOG}" | grep -v '^--$'
-printf "%s\n" "====================================================================="
+
+printf "%s\n" "${HEADLINE}"
 
 [[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Run complete for - (${MU_RUNID})" "INFO"
 

@@ -44,9 +44,9 @@ assert_file_exists()
     [[ -e "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected file (${1}) not found" "${2}"
+    printf "%s\n%s\n\n" "Expected file (${1}) not found" "${2}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_regular_file_exists
@@ -66,9 +66,9 @@ assert_regular_file_exists()
     [[ -f "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected file (${1}) not found" "${2}"
+    printf "%s\n%s\n\n" "Expected file (${1}) not found" "${2}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_file_not_zero
@@ -88,9 +88,9 @@ assert_file_not_zero()
     [[ -s "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected file (${1}) not found or empty" "${2}"
+    printf "%s\n%s\n\n" "Expected file (${1}) not found or empty" "${2}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_file_file_is_dir
@@ -110,9 +110,9 @@ assert_file_is_dir()
     [[ -d "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected file (${1}) not a directory" "${2}"
+    printf "%s\n%s\n\n" "Expected file (${1}) not a directory" "${2}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_is_block_device
@@ -132,9 +132,9 @@ assert_is_block_device()
     [[ -b "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "File under test (${1}) is not a block device" "${2}"
+    printf "%s\n%s\n\n" "File under test (${1}) is not a block device" "${2}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_is_character_device
@@ -154,9 +154,9 @@ assert_is_character_device()
     [[ -c "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "File under test (${1}) is not a character device" "${2}"
+    printf "%s\n%s\n\n" "File under test (${1}) is not a character device" "${2}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_is_named_pipe
@@ -176,9 +176,9 @@ assert_is_named_pipe()
     [[ -p "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "File under test (${1}) is not a named pipe" "${2}"
+    printf "%s\n%s\n\n" "File under test (${1}) is not a named pipe" "${2}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_is_symbolic_link
@@ -198,9 +198,9 @@ assert_is_symbolic_link()
     [[ -h "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "File under test (${1}) is not a symbolic link" "${2}"
+    printf "%s\n%s\n\n" "File under test (${1}) is not a symbolic link" "${2}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_is_symbolic_link
@@ -220,9 +220,9 @@ assert_is_symbolic_link()
     [[ -h "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "File under test (${1}) is not a symbolic link" "${2}"
+    printf "%s\n%s\n\n" "File under test (${1}) is not a symbolic link" "${2}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_is_a_terminal
@@ -242,9 +242,9 @@ assert_is_a_terminal()
     [[ -t "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "File under test (${1}) is not a terminal" "${2}"
+    printf "%s\n%s\n\n" "File under test (${1}) is not a terminal" "${2}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_is_older_than
@@ -265,9 +265,9 @@ assert_is_older_than()
     [[ "${2}" -ot "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${2}) older than (${1}) but got (${2}) newer than (${1})" "${3}"
+    printf "%s\n%s\n\n" "Expected (${2}) older than (${1}) but got (${2}) newer than (${1})" "${3}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_is_newer_than
@@ -288,8 +288,60 @@ assert_is_newer_than()
     [[ "${2}" -nt "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${2}) newer than (${1}) but got (${2}) older than (${1})" "${3}"
+    printf "%s\n%s\n\n" "Expected (${2}) newer than (${1}) but got (${2}) older than (${1})" "${3}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+##############################################################
+##
+## Name         :   assert_is_not_different
+## Author       :   Bradley Atkins
+## Description  :   Test no diff for two files
+## Date         :   04/08/2015
+## Args         :   1 - <reference file>
+##                  2 - <file under test>
+##                  3 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_is_not_different()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    if diff "${1}" "${2}" >/dev/null 2>&1
+    then
+        return 0
+    fi
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n%s\n\n" "Unexpected differences between (${1})" "and (${2})" "${3}"
+    
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+##############################################################
+##
+## Name         :   assert_is_different
+## Author       :   Bradley Atkins
+## Description  :   Test diff for two files
+## Date         :   04/08/2015
+## Args         :   1 - <reference file>
+##                  2 - <file under test>
+##                  3 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+assert_is_different()
+{
+    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    if ! diff "${1}" "${2}" >/dev/null 2>&1
+    then
+        return 0
+    fi
+
+    MU_FAILURES=$(( MU_FAILURES +1 ))
+    printf "%s\n%s\n%s\n\n" "Differences expected between (${1})" "and (${2})" "${3}"
+    
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 
 

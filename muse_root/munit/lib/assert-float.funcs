@@ -45,9 +45,9 @@ assert_equal_float()
     (( $(echo "${2} == ${1}" | bc -l) )) && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${2}) == (${1}) but got (${2}) != (${1})" "${3}"
+    printf "%s\n%s\n\n" "Expected (${2}) == (${1}) but got (${2}) != (${1})" "${3}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_not_equal_float
@@ -68,9 +68,9 @@ assert_not_equal_float()
     (( $(echo "${2} != ${1}" | bc -l) )) && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${2}) != (${1}) but got (${2}) == (${1})" "${3}"
+    printf "%s\n%s\n\n" "Expected (${2}) != (${1}) but got (${2}) == (${1})" "${3}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_less_than_float
@@ -91,9 +91,9 @@ assert_less_than_float()
     (( $(echo "${2} < ${1}" | bc -l) )) && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${2}) < (${1}) but got (${2}) >= (${1})" "${3}"
+    printf "%s\n%s\n\n" "Expected (${2}) < (${1}) but got (${2}) >= (${1})" "${3}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_greater_than_float
@@ -114,8 +114,8 @@ assert_greater_than_float()
     (( $(echo "${2} > ${1}" | bc -l) )) && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${2}) > (${1}) but got (${2}) <= (${1})" "${3}"
+    printf "%s\n%s\n\n" "Expected (${2}) > (${1}) but got (${2}) <= (${1})" "${3}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 
 

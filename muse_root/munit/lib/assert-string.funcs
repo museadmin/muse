@@ -44,9 +44,9 @@ assert_equal_string()
     [[ "${1}" == "${2}" ]] && return 0
     
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${1}) == (${2}) but got (${1}) != (${2})" "${3}"
+    printf "%s\n%s\n\n" "Expected (${1}) == (${2}) but got (${1}) != (${2})" "${3}"
 
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_not_equal_string
@@ -66,9 +66,9 @@ assert_not_equal_string()
     [[ "${1}" != "${2}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${1}) != (${2}) but got (${1}) == (${2})" "${3}"
+    printf "%s\n%s\n\n" "Expected (${1}) != (${2}) but got (${1}) == (${2})" "${3}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_less_than_string
@@ -88,9 +88,9 @@ assert_less_than_string()
     [[ "${2}" < "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${2}) < (${1}) but got (${2}) >= (${1})" "${3}"
+    printf "%s\n%s\n\n" "Expected (${2}) < (${1}) but got (${2}) >= (${1})" "${3}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_greater_than_string
@@ -110,9 +110,9 @@ assert_greater_than_string()
     [[ "${2}" > "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (${2}) > (${1}) but got (${2}) <= (${1})" "${3}"
+    printf "%s\n%s\n\n" "Expected (${2}) > (${1}) but got (${2}) <= (${1})" "${3}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_empty_string
@@ -131,9 +131,9 @@ assert_empty_string()
     [[ -z "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected (\"\") but got (${1})" "${2}"
+    printf "%s\n%s\n\n" "Expected (\"\") but got (${1})" "${2}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_not_empty_string
@@ -152,7 +152,7 @@ assert_not_empty_string()
     [[ -n "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected non empty string but got (${1})" "${2}"
+    printf "%s\n%s\n\n" "Expected non empty string but got (${1})" "${2}"
     
-} > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 

@@ -1,0 +1,10 @@
+ -rwxrwxr-x mailcontrol mailcontrol 1580  m_test1_dirs/aa
+ -rw-rw-r-- mailcontrol mailcontrol 0  m_test1_dirs/a space
+ -rw-rw-r-- mailcontrol mailcontrol 0  m_test1_dirs/ab\nd/test
+ -rw-rw-r-- mailcontrol mailcontrol 5  m_test1_dirs/ab\nd/l1/l2/l3/x3
+ -rw-rw-r-- mailcontrol mailcontrol 5  m_test1_dirs/ab\nd/l1/l2/x2
+ -rw-rw-r-- mailcontrol mailcontrol 5  m_test1_dirs/ab\nd/l1/x1
+ -rw-rw-r-- mailcontrol mailcontrol 0  m_test1_dirs/ab\nc
+ -rw-rw-r-- mailcontrol mailcontrol 0  m_test1_dirs/ab\tn/$space file
+ -rw-rw-r-- mailcontrol mailcontrol 0  m_test1_dirs/ab\tn/space file
+ -rw-rw-r-- mailcontrol mailcontrol 0  m_test1_dirs/ab\tn/ file

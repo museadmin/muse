@@ -41,6 +41,8 @@ set -a
     # Global Constants
     #======================================
     MC_NAME_SEP="."
+    MU_MENU_LINE_LEN=25
+    MU_HEAD_LINE_LEN=100
 
     #======================================
     # Runtime vars
@@ -51,6 +53,7 @@ set -a
     MU_ASSERTIONS=0
     MU_CMD_LINE=""
     MU_TEST_NAMES=""
+    MU_CURRENT_PROJECT=""
 
     TMPFIL1=""
     TMPFILE2=""
@@ -217,6 +220,33 @@ mu_clean_file()
 }
 ##############################################################
 ##
+## Name         :   mu_gen_line
+## Author       :   Bradley Atkins
+## Description  :   Generate a line of character $1
+## Date         :   06/08/2015
+## Args         :   1 - Line type
+##                  2 - Length of line
+##                  3 - VAR to return line in
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+mu_gen_line()
+{
+    [[ $# -eq 3 ]] || die "Usage. Arg count. 3 expected (${FUNCNAME})"
+    [[ "${2}" =~ ^[[:digit:]]+$ ]] || die "Usage. Arg[2]. Integer expected (${FUNCNAME})"
+
+    local L=
+    for I in $(seq "${2}")
+    do
+        L="${L}${1}"
+    done
+
+    eval "${3}"='${L}'
+}
+##############################################################
+##
 ## Name         :   validate_cmd_line
 ## Author       :   Bradley Atkins
 ## Description  :   Check the cmd line is valid
@@ -228,7 +258,8 @@ mu_clean_file()
 ##############################################################
 validate_cmd_line()
 {
-    local FILE= PRJS=
+    local FILE= OPT= PRJS= HLINE=
+    mu_gen_line "=" "${MU_MENU_LINE_LEN}" HLINE
 
     while [[ $# -gt 0 ]]
     do
@@ -269,7 +300,11 @@ validate_cmd_line()
                 if [[ -n $(ls -d test/* 2>/dev/null | awk '{print $NF}' FS='/') ]]
                 then
                     clear
-                    PS3='Set working project:'
+                    echo "${HLINE}"
+                    echo "Choose a project"
+                    echo "${HLINE}"
+
+                    PS3='Set working project: '
                     OPTIONS=($(ls -d test/* 2>/dev/null | awk '{print $NF}' FS='/') "Quit")
                     select OPT in "${OPTIONS[@]}"
                     do
@@ -281,17 +316,23 @@ validate_cmd_line()
                                 exit
                                 ;;
                             *)
+                                
                                 #======================================
                                 # Need another menu of tests within 
                                 # the project
                                 #======================================
-                                PRJ="${OPT}"
+                                MU_CURRENT_PROJECT="${OPT}"
                                 clear
-                                TESTS="$(ls -f test/"${PRJ}"/mu_test* 2>/dev/null | awk '{print $NF}' FS='/')"
+                                TESTS="$(ls -f test/"${MU_CURRENT_PROJECT}"/mu_test* 2>/dev/null | awk '{print $NF}' FS='/')"
                                 if [[ -n "${TESTS}" ]] 
                                 then
-                                    PS3='Select test to run:'
+                                    echo "${HLINE}"
+                                    echo "Choose a test"
+                                    echo "${HLINE}"
+                                    
+                                    PS3='Select test to run: '
                                     OPTIONS=("All" ${TESTS} "Quit")
+                                    
                                     select OPT in "${OPTIONS[@]}"
                                     do
                                         ## Choice out of range
@@ -317,16 +358,21 @@ validate_cmd_line()
                                             ;;
                                         esac
                                     done
+                                    clear
                                     break
                                 else
-                                    echo "No test files found in project (${PRJ})"
+                                    echo "${HLINE}"
+                                    echo "No test files found in project (${MU_CURRENT_PROJECT})"
+                                    echo "${HLINE}"
                                     exit
                                 fi
                                 ;;
                         esac
                     done
                     else
+                    echo "${HLINE}"
                     echo "No projects found in test directory"
+                    echo "${HLINE}"
                     exit
                 fi
             ;;
@@ -462,7 +508,7 @@ mu_create_test_files()
                 # Record the testname in the run array
                 # TODO refactor for project name
                 #======================================
-                TEST_NAME=${TEST_SUITE}${MC_NAME_SEP}$(echo "${LINE}" | cut -d"=" -f2)
+                TEST_NAME=${MU_CURRENT_PROJECT}${MC_NAME_SEP}${TEST_SUITE}${MC_NAME_SEP}$(echo "${LINE}" | cut -d"=" -f2)
                 MU_RUN_ORDER[$(( MU_RUN_INDEX += 1 ))]="${TEST_NAME}"
                 TEST_FILE="${MU_TMP}/${TEST_NAME}"
                 printf "%s\n" "#! /bin/bash" > "${TEST_FILE}"
@@ -473,6 +519,8 @@ mu_create_test_files()
                 printf "%s\n" "$LINE" | sed '{
                     s/\(require .*\)/\1 || return 0/
                     s/\(import .*\)/\1 || return 0/
+                    s/exit/return 0/
+
                 }' >> "${TEST_FILE}"
             fi
         done < <( awk '/^def/{printf "%s%s\n", "TEST=", $2;next}

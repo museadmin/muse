@@ -1,6 +1,23 @@
 #! /bin/bash
 ##############################################################
 ##
+## Name         :   m_fail
+## Author       :   Bradley Atkins
+## Description  :   Error Handler
+## Date         :   06/08/2015
+## Args         :   1 - Error Level
+##                  2 - Err MSG
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+m_fail()
+{
+    echo "${1}"
+}
+##############################################################
+##
 ## Name         :   m_get_file_data
 ## Author       :   Bradley Atkins
 ## Description  :   Clean the output of the find | ls command
