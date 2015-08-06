@@ -152,7 +152,7 @@ assert_not_empty_string()
     [[ -n "${1}" ]] && return 0
 
     MU_FAILURES=$(( MU_FAILURES +1 ))
-    printf "%s\n%s\n" "Expected non empty string" "${2}"
+    printf "%s\n%s\n" "Expected non empty string but got (${1})" "${2}"
     
 } > "${MU_TMP}/${THIS_TEST_NAME}.rpt"
 

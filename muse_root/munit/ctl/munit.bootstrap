@@ -1,6 +1,7 @@
+#! /bin/bash
 ##############################################################
 ##
-## Name         :   munit.env
+## Name         :   munit.bootstrap
 ## Author       :   Bradley Atkins
 ## Description  :   Environment vars for MUNIT
 ## Date         :   02/08/2015
@@ -10,27 +11,6 @@
 ##############################################################
 
 set -a
-
-    #======================================
-    # Control
-    #======================================
-    MU_LOG_LEVEL="DEBUG"
-
-    #======================================
-    # Logging
-    #======================================
-    MU_LOG="/var/log/munit/munit.log"
-
-    #======================================
-    # MUNIT MAPPED directories. [1] is
-    # always pointing to munit top dir.
-    # The others are used to find any files
-    # in the SUT
-    #======================================
-    declare -a MU_MAP_DIRS
-    MU_MAP_DIRS[1]="$(dirname $0)"
-    MU_MAP_DIRS[2]="/opt/mailcontrol/.muse_dev"
-    MU_MAP_DIRS[3]="/var/opt/muse_root"
 
     #======================================
     # MUNIT test definitions
@@ -108,9 +88,10 @@ usage()
     printf "\n"
     printf "\t%s\n" "usage: ${0##*/} [-option] file file ..."
     printf "\n"
-    printf "\t%s\n" "${0##*/} <test name>           :Run a test suite"
-    printf "\t%s\n" "${0##*/} -a|--all              :Archive tagged results"
-
+    printf "\t%s\n" "${0##*/} <test name/s>         :Run a test suite"
+    printf "\t%s\n" "${0##*/} -a                    :Run all tests in current project"
+    printf "\t%s\n" "${0##*/} -s                    :Select current project and tests"
+    exit
 }
 ##############################################################
 ##
@@ -247,15 +228,15 @@ mu_clean_file()
 ##############################################################
 validate_cmd_line()
 {
-    local FILE
+    local FILE= PRJS=
 
     while [[ $# -gt 0 ]]
     do
         case ${1} in
             -a|--all)
                 
-                [[ $# -gt 1 ]] && die "Usage. Option (${1}) requires no arguments"
                 shift
+                [[ $# -gt 0 ]] && die "Usage. Option (${1}) requires no arguments"
 
                 #======================================
                 # User wants to run all tests
@@ -273,6 +254,88 @@ validate_cmd_line()
                 [[ ${1} == mu_* ]] || die "Usage. Test name must begin with mu_"
                 MU_TEST_NAMES="${MU_TEST_NAMES} ${1}"
                 shift
+            ;;
+            -s)
+                shift
+                [[ $# -gt 0 ]] && usage
+
+                ## Force a single column menu
+                export COLUMNS=1
+
+                #======================================
+                # List all projects in a menu format.
+                # Set current project from selection.
+                #======================================
+                if [[ -n $(ls -d test/* 2>/dev/null | awk '{print $NF}' FS='/') ]]
+                then
+                    clear
+                    PS3='Set working project:'
+                    OPTIONS=($(ls -d test/* 2>/dev/null | awk '{print $NF}' FS='/') "Quit")
+                    select OPT in "${OPTIONS[@]}"
+                    do
+                        ## Choice out of range
+                        [[ "${REPLY}" -gt "${#OPTIONS[@]}" ]] && continue
+                        
+                        case "${OPT}" in
+                            "Quit")
+                                exit
+                                ;;
+                            *)
+                                #======================================
+                                # Need another menu of tests within 
+                                # the project
+                                #======================================
+                                PRJ="${OPT}"
+                                clear
+                                TESTS="$(ls -f test/"${PRJ}"/mu_test* 2>/dev/null | awk '{print $NF}' FS='/')"
+                                if [[ -n "${TESTS}" ]] 
+                                then
+                                    PS3='Select test to run:'
+                                    OPTIONS=("All" ${TESTS} "Quit")
+                                    select OPT in "${OPTIONS[@]}"
+                                    do
+                                        ## Choice out of range
+                                        [[ "${REPLY}" -gt "${#OPTIONS[@]}" ]] && continue
+                                        
+                                        case "${OPT}" in 
+                                            "All") 
+                                                #======================================
+                                                # User wants to run all tests
+                                                #======================================
+                                                for FILE in ${TESTS}
+                                                do
+                                                    MU_TEST_NAMES="${MU_TEST_NAMES} $(basename ${FILE})"
+                                                done
+                                                break
+                                            ;;
+                                            "Quit")
+                                                exit
+                                            ;;
+                                            *)
+                                                MU_TEST_NAMES="${OPT}"
+                                                break
+                                            ;;
+                                        esac
+                                    done
+                                    break
+                                else
+                                    echo "No test files found in project (${PRJ})"
+                                    exit
+                                fi
+                                ;;
+                        esac
+                    done
+                    else
+                    echo "No projects found in test directory"
+                    exit
+                fi
+            ;;
+            -t)
+                #======================================
+                # List all tests sorted by project then
+                # name in menu form. Run selection.
+                #======================================
+                echo "TODO"
             ;;
         esac
     done
@@ -407,7 +470,10 @@ mu_create_test_files()
                 chmod +x "${TEST_FILE}"
                 MU_NUM_TESTS=$(( MU_NUM_TESTS + 1 ))
             else
-                printf "%s\n" "$LINE" >> "${TEST_FILE}"
+                printf "%s\n" "$LINE" | sed '{
+                    s/\(require .*\)/\1 || return 0/
+                    s/\(import .*\)/\1 || return 0/
+                }' >> "${TEST_FILE}"
             fi
         done < <( awk '/^def/{printf "%s%s\n", "TEST=", $2;next}
                         !/^end/{printf "%s\n", $0}
@@ -422,17 +488,14 @@ mu_create_test_files()
     do
         echo "${TEST_NAME}" >> "${TMPFILE2}"
     done
-    RCNT=$(cat "${TMPFILE2}" | wc -l)
-    UCNT=$(sort -u "${TMPFILE2}" | wc -l)
-    if [[ "${RCNT}" -ne "${UCNT}" ]]
+    
+    if ! diff <(sort "${TMPFILE2}") <(sort -u "${TMPFILE2}") > /dev/null 2>&1
     then
         echo "==========================================================="
         echo "Duplicate names in test files"
         echo "==========================================================="
         diff <(sort "${TMPFILE2}") <(sort -u "${TMPFILE2}") | sed 's/< //g' | egrep mu_
         echo "==========================================================="
-        
-        [[ "${RCNT}" -eq "${UCNT}" ]] || die "Duplicate names in test files"
     fi
 }
 ##############################################################

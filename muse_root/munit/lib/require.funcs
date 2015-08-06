@@ -1,0 +1,93 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   require.funcs
+## Author       :   Bradley Atkins
+## Description  :   MUNIT include and require assertions
+## Date         :   04/08/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## This program is free software; you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, version 2 only.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program; if not, write to the Free Software
+## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
+## USA
+##
+##############################################################
+
+##############################################################
+##
+## Name         :   require
+## Author       :   Bradley Atkins
+## Description  :   Confirm a required file exists
+## Date         :   04/08/2015
+## Args         :   1 - File name
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+require()
+{
+    local TF= 
+    #======================================
+    # See if we can find the file required
+    #======================================
+    mu_find_file "${1}" TF
+    [[ -e "${TF}" ]] && return 0
+
+    if [[ "${MU_REQUIRE_DEFAULT}" == "ERR" ]]
+    then
+        raise_error "Required file (${1}) not found"
+    else
+        raise_failure "Required file (${1}) not found"
+    fi
+    return 1
+} 
+##############################################################
+##
+## Name         :   import
+## Author       :   Bradley Atkins
+## Description  :   Source a mapped file
+## Date         :   04/08/2015
+## Args         :   1 - File name
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+import()
+{
+    local TF= 
+    #======================================
+    # See if we can find the file required
+    #======================================
+    mu_find_file "${1}" TF
+    if [[ -e "${TF}" ]] 
+    then
+        if ! source "${TF}" 
+        then
+            raise_error "Import failed for file (${1})"
+            return 1
+        fi
+    else
+        if [[ "${MU_REQUIRE_DEFAULT}" == "ERR" ]]
+        then
+            raise_error "Import file (${1}) not found"
+        else
+            raise_failure "Import file (${1}) not found"
+        fi
+        return 1
+    fi
+    return 0
+} 

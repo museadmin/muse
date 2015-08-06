@@ -77,8 +77,9 @@ die()
 #======================================
 # Bootstrap
 #======================================
-
-source $(dirname $0)/ctl/munit_bootstrap
+cd $(echo "$(cd "$(dirname "$0")"; pwd)")
+source ./ctl/user.env
+source ./ctl/munit.bootstrap
 [[ -n "${MU_LOG}" ]] || die "Env variable MU_LOG not set (munit)"
 [[ -n "${MU_MUNIT_ROOT}" ]] || die "Env variable MU_MUNIT_ROOT not set (munit)"
 [[ -n "${MU_TMP}" ]] || die "Env variable MU_TMP not set (munit)"
@@ -135,6 +136,7 @@ include assert-integer.funcs
 include assert-float.funcs
 include assert-file.funcs
 include raise.funcs
+include require.funcs
 [[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Includes successfully sourced" "INFO"
 
 #======================================

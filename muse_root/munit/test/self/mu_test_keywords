@@ -1,0 +1,29 @@
+##############################################################
+##
+## Name         :   mu_test_keywords
+## Author       :   Bradley Atkins
+## Description  :   Test MUNITs keywords
+## Date         :   05/08/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+## Test Required File exists - Pass
+def Test-RequireFile-Pass
+    require test.res
+    require funky_dirs.tar
+end
+## Test Required File exists - Fail
+def Test-RequireFile-Fail
+    require testing.res
+end
+## Test file import - Pass
+def Test-Importfile-Pass
+    import test.res
+end
+## Test file import - Fail
+def Test-Importfile-Fail
+    import testing.res
+end
