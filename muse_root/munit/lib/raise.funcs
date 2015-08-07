@@ -39,9 +39,12 @@
 ##############################################################
 raise_error()
 {
-    MU_ERRORS=$(( MU_ERRORS +1 ))
-    printf "\n\t$(( MU_ERROR_INDEX += 1 )) - %s\n" ${THIS_TEST_NAME} 
+    local INDX=
+    mu_set_errors ${THIS_TEST_NAME}
+    mu_set_error_index INDX
+    printf "\n\t${INDX} - %s\n" ${THIS_TEST_NAME} 
     printf "\t\t%s\n" "${1}" 
+    exit
 } >> "${MU_TEST_BUF}"
 ##############################################################
 ##
@@ -57,7 +60,7 @@ raise_error()
 ##############################################################
 raise_failure()
 {
-    MU_FAILURES=$(( MU_FAILURES +1 ))
+    mu_set_failures ${THIS_TEST_NAME}
     printf "%s\n" "${1}" 
-} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_RPT}/${THIS_TEST_NAME}.rpt"
 

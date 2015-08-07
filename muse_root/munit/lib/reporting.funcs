@@ -1,0 +1,104 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   reporting.funcs
+## Author       :   Bradley Atkins
+## Description  :   Helper functions to handle test reporting
+## Date         :   07/08/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+## This program is free software; you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, version 2 only.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program; if not, write to the Free Software
+## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
+## USA
+##
+##############################################################
+
+##############################################################
+##
+## Name         :   mu_set_assertions
+## Author       :   Bradley Atkins
+## Description  :   Set the assertion count in a test
+##                  stat file
+## Date         :   07/08/2015
+## Args         :   1 - Name of test file
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+mu_set_assertions()
+{
+    local ASSERTIONS= FAILURES= ERRORS=
+    read ASSERTIONS FAILURES ERRORS < "${MU_RPT}/${THIS_TEST_NAME}.sts"
+    echo "$(( ASSERTIONS += 1 )) ${FAILURES} ${ERRORS}" > "${MU_RPT}/${THIS_TEST_NAME}.sts"
+}
+##############################################################
+##
+## Name         :   mu_set_failures
+## Author       :   Bradley Atkins
+## Description  :   Set the failure count in a test
+##                  stat file
+## Date         :   07/08/2015
+## Args         :   1 - Name of test file
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+mu_set_failures()
+{
+    local ASSERTIONS= FAILURES= ERRORS=
+    read ASSERTIONS FAILURES ERRORS < "${MU_RPT}/${THIS_TEST_NAME}.sts"
+    echo "${ASSERTIONS} $(( FAILURES += 1 )) ${ERRORS}" > "${MU_RPT}/${THIS_TEST_NAME}.sts"
+}
+##############################################################
+##
+## Name         :   mu_set_errors
+## Author       :   Bradley Atkins
+## Description  :   Set the error count in a test
+##                  stat file
+## Date         :   07/08/2015
+## Args         :   1 - Name of test file
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+mu_set_errors()
+{
+    local ASSERTIONS= FAILURES= ERRORS=
+    read ASSERTIONS FAILURES ERRORS < "${MU_RPT}/${THIS_TEST_NAME}.sts"
+    echo "${ASSERTIONS} ${FAILURES} $(( ERRORS += 1 ))" > "${MU_RPT}/${THIS_TEST_NAME}.sts"
+}
+##############################################################
+##
+## Name         :   mu_set_error_index
+## Author       :   Bradley Atkins
+## Description  :   Increment the global var persisted in file
+## Date         :   07/08/2015
+## Args         :   1 - VAR for return value
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+mu_set_error_index()
+{
+    local IDX=
+    read IDX < "${MU_ERROR_IDX}"
+    echo "$(( IDX += 1 ))" > "${MU_ERROR_IDX}"
+    eval "${1}"="${IDX}"
+}

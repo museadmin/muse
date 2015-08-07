@@ -11,19 +11,19 @@
 ##                  Disabled    [n]
 ##############################################################
 ## File exists - Pass
-def Test-FileExists-True
+def Test-FileExists-Pass
     assert_file_exists "/var/log/messages" "Test should have passed"
 end
 ## File exists - Fail
-def Test-FileExists-False
+def Test-FileExists-Fail
     assert_file_exists "/var/log/massages" "Fail with file not found"
 end
 ## Regular File exists - Pass
-def Test-RegularFileExists-True
+def Test-RegularFileExists-Pass
     assert_regular_file_exists "/var/log/messages" "Test should have passed"
 end
 ## Regular File exists - Fail
-def Test-RegularFileExists-False
+def Test-RegularFileExists-Fail
     assert_regular_file_exists "/var/log/massages" "Fail with file not found"
 end
 ## File exists and is not zero size - Pass
@@ -39,7 +39,7 @@ def Test-RegularFileIsNotZeroSize-Fail
     [[ -f "${MU_TMP}/assert_file_not_zero.tmp" ]] && rm -f "${MU_TMP}/assert_file_not_zero.tmp"
 end
 ## File exists and is a directory - Pass
-def Test-FileIsDirectory-True
+def Test-FileIsDirectory-Pass
     assert_file_is_dir "${MU_TMP}" "Test should have passed"
 end
 ## File exists and is a directory - Fail
@@ -47,7 +47,7 @@ def Test-FileIsDirectory-Fail
     assert_file_is_dir "/temple" "Fail with dir not found"
 end
 ## File exists and is block device - Pass
-def Test-IsBlockDevice-True
+def Test-IsBlockDevice-Pass
     BD="/dev/$(ls /sys/block | awk '{print $1;exit}')"
     assert_is_block_device "${BD}" "Test should have passed"
 end
@@ -57,7 +57,7 @@ def Test-IsBlockDevice-Fail
     assert_is_block_device "${BD}" "Fail because not block device"
 end
 ## File exists and is chacter device - Pass
-def Test-IsCharacterDevice-True
+def Test-IsCharacterDevice-Pass
     CD="/dev/$(ls -l /dev | awk '/^c/{print $NF;exit}')"
     assert_is_character_device "${CD}" "Test should have passed"
 end
@@ -67,7 +67,7 @@ def Test-IsCharacterDevice-Fail
     assert_is_character_device "${CD}" "Fail because not character device"
 end
 ## File exists and is named pipe - Pass
-def Test-IsNamedPipe-True
+def Test-IsNamedPipe-Pass
     TP="${MU_TMP}/munit_pipe"
     mkfifo "${TP}" || raise_error "Failed to create named pipe for test"
     assert_is_named_pipe "${TP}" "Test should have passed"
@@ -78,15 +78,15 @@ def Test-IsNamedPipe-Fail
     assert_is_named_pipe "/var/log/messages" "Fail because file is not a named pipe"
 end
 ## File descriptor is associated with a terminal
-def Test-IsTerminal-True
+def Test-IsTerminal-Pass
     assert_is_a_terminal "0" "Test should have passed"
 end
 ## File descriptor is not associated with a terminal
-def Test-IsTerminal-False
+def Test-IsTerminal-Fail
     assert_is_a_terminal "/var/log/messages" "Fail because file is not a terminal"
 end
 ## File is older than - Pass
-def Test-FileIsOlder-True
+def Test-FileIsOlder-Pass
     NEWF="${MU_TMP}/munit_newfile"
     date > "${NEWF}"
     assert_is_older_than "${NEWF}" "/var/log/messages" "Test should have passed"
@@ -100,7 +100,7 @@ def Test-FileIsOlder-Fail
     [[ -f "${NEWF}" ]] && rm -f "${NEWF}"
 end
 ## File is newer than - Pass
-def Test-FileIsNewer-True
+def Test-FileIsNewer-Pass
     NEWF="${MU_TMP}/munit_newfile"
     date > "${NEWF}"
     assert_is_newer_than "/var/log/messages" "${NEWF}" "Test should have passed"

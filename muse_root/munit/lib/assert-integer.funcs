@@ -41,13 +41,13 @@
 ##############################################################
 assert_equal_integer()
 {
-    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    mu_set_assertions ${THIS_TEST_NAME}
     [[ "${1}" -eq "${2}" ]] && return 0
 
-    MU_FAILURES=$(( MU_FAILURES +1 ))
+    mu_set_failures ${THIS_TEST_NAME}
     printf "%s\n%s\n\n" "Expected (${1}) == (${2}) but got (${1}) != (${2})" "${3}"
     
-} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_RPT}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_not_equal_integer
@@ -64,13 +64,13 @@ assert_equal_integer()
 ##############################################################
 assert_not_equal_integer()
 {
-    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    mu_set_assertions ${THIS_TEST_NAME}
     [[ "${1}" -ne "${2}" ]] && return 0
 
-    MU_FAILURES=$(( MU_FAILURES +1 ))
+    mu_set_failures ${THIS_TEST_NAME}
     printf "%s\n%s\n\n" "Expected (${1}) != (${2}) but got (${1}) == (${2})" "${3}"
     
-} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_RPT}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_greater_than_integer
@@ -87,13 +87,13 @@ assert_not_equal_integer()
 ##############################################################
 assert_greater_than_integer()
 {
-    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    mu_set_assertions ${THIS_TEST_NAME}
     [[ "${2}" -gt "${1}" ]] && return 0
 
-    MU_FAILURES=$(( MU_FAILURES +1 ))
+    mu_set_failures ${THIS_TEST_NAME}
     printf "%s\n%s\n\n" "Expected (${2}) > (${1}) but got (${2}) <= (${1})" "${3}"
     
-} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_RPT}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_greater_than_or_equal_integer
@@ -110,13 +110,13 @@ assert_greater_than_integer()
 ##############################################################
 assert_greater_than_or_equal_integer()
 {
-    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    mu_set_assertions ${THIS_TEST_NAME}
     [[ "${2}" -ge "${1}" ]] && return 0
 
-    MU_FAILURES=$(( MU_FAILURES +1 ))
+    mu_set_failures ${THIS_TEST_NAME}
     printf "%s\n%s\n\n" "Expected (${2}) >= (${1}) but got (${2}) < (${1})" "${3}"
     
-} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_RPT}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_less_than_integer
@@ -133,13 +133,13 @@ assert_greater_than_or_equal_integer()
 ##############################################################
 assert_less_than_integer()
 {
-    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    mu_set_assertions ${THIS_TEST_NAME}
     [[ "${2}" -lt "${1}" ]] && return 0
 
-    MU_FAILURES=$(( MU_FAILURES +1 ))
+    mu_set_failures ${THIS_TEST_NAME}
     printf "%s\n%s\n\n" "Expected (${2}) < (${1}) but got (${2}) >= (${1})" "${3}"
     
-} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_RPT}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
 ## Name         :   assert_less_than_or_equal_integer
@@ -156,12 +156,12 @@ assert_less_than_integer()
 ##############################################################
 assert_less_than_or_equal_integer()
 {
-    MU_ASSERTIONS=$(( MU_ASSERTIONS +1 ))
+    mu_set_assertions ${THIS_TEST_NAME}
     [[ "${2}" -le "${1}" ]] && return 0
 
-    MU_FAILURES=$(( MU_FAILURES +1 ))
+    mu_set_failures ${THIS_TEST_NAME}
     printf "%s\n%s\n\n" "Expected (${2}) <= (${1}) but got (${2}) > (${1})" "${3}"
     
-} >> "${MU_TMP}/${THIS_TEST_NAME}.rpt"
+} >> "${MU_RPT}/${THIS_TEST_NAME}.rpt"
 
 

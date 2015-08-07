@@ -1,9 +1,9 @@
 #! /bin/bash
 ##############################################################
 ##
-## Name         :   munit.bootstrap
+## Name         :   bootstrap
 ## Author       :   Bradley Atkins
-## Description  :   Environment vars for MUNIT
+## Description  :   Environment vars for MUNIT and common funcs
 ## Date         :   02/08/2015
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
@@ -16,18 +16,19 @@ set -a
     # MUNIT test definitions
     #======================================
     eval MU_MUNIT_ROOT="${MU_MAP_DIRS[1]}"
-    MU_TEST_DEFS="${MU_MUNIT_ROOT}/test"
 
     #======================================
     # Path to MUNIT libraries
     #======================================
     MU_LIB="${MU_MUNIT_ROOT}/lib"
+    MU_CTL="${MU_MUNIT_ROOT}/ctl"
+    MU_TST="${MU_MUNIT_ROOT}/tst"
 
     #======================================
     # MUNIT control files
     #======================================
-    MU_CTL="${MU_MUNIT_ROOT}/ctl"
     MU_TMP="/var/tmp/munit/tmp"
+    MU_RPT="/var/tmp/munit/rpt"
     MU_MUNIT_MAP="${MU_TMP}/mu_test_map"
 
     #======================================
@@ -35,18 +36,49 @@ set -a
     #======================================
     MU_TEST_LOG="${MU_TMP}/mu_test_log"
     MU_TEST_BUF="${MU_TMP}/mu_test_buf"
+    MU_TEST_HED="${MU_TMP}/mu_test_hed"
     MU_ERROR_BUF="${MU_TMP}/mu_error_buf"
+    MU_ERROR_IDX="${MU_TMP}/mu_error_idx"   ## Index for error report
 
     #======================================
     # Global Constants
     #======================================
     MC_NAME_SEP="."
     MU_MENU_LINE_LEN=25
-    MU_HEAD_LINE_LEN=100
+    MU_HEAD_LINE_LEN=75
 
     #======================================
-    # Runtime vars
+    # Run Array for Test names
     #======================================
+    declare -a MU_RUN_ORDER
+
+##############################################################
+##
+## Name         :   mu_validate_environment
+## Author       :   Bradley Atkins
+## Description  :   Check we have sensible environment vars
+## Date         :   07/08/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+mu_validate_environment()
+{
+    [[ "${MU_MUNIT_ROOT}" =~ ^/.* ]] || die "MU_MUNIT_ROOT validation failed (${FUNCNAME})"
+    [[ "${MU_LIB}" =~ ^/.*/lib ]] || die " MU_LIB validation failed (${FUNCNAME})"
+    [[ "${MU_CTL}" =~ ^/.*/ctl ]] || die "MU_CTL validation failed (${FUNCNAME})"
+    [[ "${MU_TST}" =~ ^/.*/tst ]] || die "MU_CTL validation failed (${FUNCNAME})"
+    [[ "${MU_TMP}" =~ ^/.*/munit/tmp ]] || die "MU_TMP validation failed (${FUNCNAME})"
+    [[ "${MU_MUNIT_MAP}" =~ ^/.*/mu_test_map ]] || die "MU_MUNIT_MAP validation failed (${FUNCNAME})"
+    [[ "${MU_TEST_LOG}" =~ ^/.*/mu_test_log ]] || die "MU_TEST_LOG validation failed (${FUNCNAME})"
+    [[ "${MU_TEST_BUF}" =~ ^/.*/mu_test_buf ]] || die "MU_TEST_BUF validation failed (${FUNCNAME})"
+    [[ "${MU_TEST_HED}" =~ ^/.*/mu_test_hed ]] || die "MU_TEST_HED validation failed (${FUNCNAME})"
+    [[ "${MU_ERROR_BUF}" =~ ^/.*/mu_error_buf ]] || die "MU_ERROR_BUF validation failed (${FUNCNAME})"
+    [[ -n "${MC_NAME_SEP}" ]] || die "MC_NAME_SEP validation failed (${FUNCNAME})"
+    [[ "${MU_MENU_LINE_LEN}" =~ ^[[:digit:]]+$ ]] || die "MU_MENU_LINE_LEN validation failed (${FUNCNAME})"
+    [[ "${MU_HEAD_LINE_LEN}" =~ ^[[:digit:]]+$ ]] || die "MU_HEAD_LINE_LEN validation failed (${FUNCNAME})"
     MU_ERRORS=0
     MU_FAILURES=0
     MU_TESTS=0
@@ -54,28 +86,36 @@ set -a
     MU_CMD_LINE=""
     MU_TEST_NAMES=""
     MU_CURRENT_PROJECT=""
-
     TMPFIL1=""
     TMPFILE2=""
     TMPFILE3=""
-
     TESTFILE=""
-
-    #======================================
-    # Run Array for Test names
-    #======================================
-    declare -a MU_RUN_ORDER
-    MU_RUN_INDEX=0
-    MU_NUM_TESTS=0
-    MU_ERROR_INDEX=0
-    MU_FAIL_INDEX=0
-
     #======================================
     # Reporting
     #======================================
     MU_FAILURE_LINE_PRINTED=false
-
-
+    MU_ERROR_LINE_PRINTED=false
+}
+##############################################################
+##
+## Name         :   mu_init
+## Author       :   Bradley Atkins
+## Description  :   Setup the run environment
+## Date         :   07/08/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+mu_init()
+{
+    mkdir -p "${MU_TMP}" 2>/dev/null 
+    mkdir -p "${MU_RPT}" 2>/dev/null
+    [[ -d "${MU_TMP}" ]] || die "Failed to create tmp dir (${MU_TMP}) (${FUNCNAME})"
+    [[ -d "${MU_RPT}" ]] || die "Failed to create tmp dir (${MU_RPT}) (${FUNCNAME})"
+    printf "%s" "0" > "${MU_ERROR_IDX}"
+}
 ##############################################################
 ##
 ## Name         :   usage
@@ -88,12 +128,16 @@ set -a
 ##############################################################
 usage()
 {
+    local HEADLINE= OFS=$(( MU_HEAD_LINE_LEN / 3 ))
+    mu_gen_line "=" "${MU_HEAD_LINE_LEN}" HEADLINE
+
+    printf "%s\n" "${HEADLINE}"
+    printf "\n%-${OFS}s%s\n\n" "" "MUNIT Usage Guide"
+    printf "\t%s\n" "usage: ${0##*/} [-option] [file] [file] ..."
     printf "\n"
-    printf "\t%s\n" "usage: ${0##*/} [-option] file file ..."
-    printf "\n"
-    printf "\t%s\n" "${0##*/} <test name/s>         :Run a test suite"
-    printf "\t%s\n" "${0##*/} -a                    :Run all tests in current project"
-    printf "\t%s\n" "${0##*/} -s                    :Select current project and tests"
+    printf "\t%s\n" "${0##*/} <test name/s>  :Run test suite/s"
+    printf "\t%s\n" "${0##*/} -s             :Select project and test/s"
+    printf "\n%s\n" "${HEADLINE}"
     exit
 }
 ##############################################################
@@ -258,26 +302,17 @@ mu_gen_line()
 ##############################################################
 validate_cmd_line()
 {
+    [[ $# -eq 0 ]] && usage
+
+    #======================================
+    # Validate
+    #======================================
     local FILE= OPT= PRJS= HLINE=
     mu_gen_line "=" "${MU_MENU_LINE_LEN}" HLINE
 
     while [[ $# -gt 0 ]]
     do
         case ${1} in
-            -a|--all)
-                
-                shift
-                [[ $# -gt 0 ]] && die "Usage. Option (${1}) requires no arguments"
-
-                #======================================
-                # User wants to run all tests
-                #======================================
-                for FILE in $(find "${MU_TEST_DEFS}" -type f -name mu_\*)
-                do
-                    MU_TEST_NAMES="${MU_TEST_NAMES} $(basename ${FILE})"
-                done
-                [[ -n "${MU_TEST_NAMES}" ]] || die "No tests found in (${MU_TEST_DEFS})"
-            ;;
             mu_*)
                 #======================================
                 # User wants to run specific test/s
@@ -297,7 +332,7 @@ validate_cmd_line()
                 # List all projects in a menu format.
                 # Set current project from selection.
                 #======================================
-                if [[ -n $(ls -d test/* 2>/dev/null | awk '{print $NF}' FS='/') ]]
+                if [[ -n $(ls -d tst/* 2>/dev/null | awk '{print $NF}' FS='/') ]]
                 then
                     clear
                     echo "${HLINE}"
@@ -305,7 +340,7 @@ validate_cmd_line()
                     echo "${HLINE}"
 
                     PS3='Set working project: '
-                    OPTIONS=($(ls -d test/* 2>/dev/null | awk '{print $NF}' FS='/') "Quit")
+                    OPTIONS=($(ls -d tst/* 2>/dev/null | awk '{print $NF}' FS='/') "Quit")
                     select OPT in "${OPTIONS[@]}"
                     do
                         ## Choice out of range
@@ -323,7 +358,7 @@ validate_cmd_line()
                                 #======================================
                                 MU_CURRENT_PROJECT="${OPT}"
                                 clear
-                                TESTS="$(ls -f test/"${MU_CURRENT_PROJECT}"/mu_test* 2>/dev/null | awk '{print $NF}' FS='/')"
+                                TESTS="$(ls -f tst/"${MU_CURRENT_PROJECT}"/mu_test* 2>/dev/null | awk '{print $NF}' FS='/')"
                                 if [[ -n "${TESTS}" ]] 
                                 then
                                     echo "${HLINE}"
@@ -375,13 +410,6 @@ validate_cmd_line()
                     echo "${HLINE}"
                     exit
                 fi
-            ;;
-            -t)
-                #======================================
-                # List all tests sorted by project then
-                # name in menu form. Run selection.
-                #======================================
-                echo "TODO"
             ;;
         esac
     done
@@ -506,21 +534,37 @@ mu_create_test_files()
             then
                 #======================================
                 # Record the testname in the run array
-                # TODO refactor for project name
                 #======================================
                 TEST_NAME=${MU_CURRENT_PROJECT}${MC_NAME_SEP}${TEST_SUITE}${MC_NAME_SEP}$(echo "${LINE}" | cut -d"=" -f2)
                 MU_RUN_ORDER[$(( MU_RUN_INDEX += 1 ))]="${TEST_NAME}"
                 TEST_FILE="${MU_TMP}/${TEST_NAME}"
                 printf "%s\n" "#! /bin/bash" > "${TEST_FILE}"
+                [[ "${MU_DEBUG_TEST}" == "TRUE" ]] && printf "%s\n" "set -x" >> "${TEST_FILE}"
                 printf "%s\n" "export THIS_TEST_NAME=${TEST_NAME}" >> "${TEST_FILE}"
+                printf "%s\n" "export MU_TMP=${MU_TMP}" >> "${TEST_FILE}"
+                printf "%s\n" "export MU_RPT=${MU_RPT}" >> "${TEST_FILE}"
+                printf "%s\n" "export MU_ERROR_IDX=${MU_ERROR_IDX}" >> "${TEST_FILE}"
+                printf "%s\n" "export MU_TEST_BUF=${MU_TEST_BUF}" >> "${TEST_FILE}"
+                #======================================
+                # Add source of all libraries
+                #======================================
+                for f in $(ls "${MU_LIB}/"*.funcs)
+                do
+                    printf "%s\n" "source ${f}" >> "${TEST_FILE}"
+                done
+
                 chmod +x "${TEST_FILE}"
                 MU_NUM_TESTS=$(( MU_NUM_TESTS + 1 ))
+                
+                #======================================
+                # Create a stats file for it
+                #======================================
+                printf "%s" "0 0 0" > "${MU_RPT}/${TEST_NAME}.sts"
+                :>"${MU_RPT}/${TEST_NAME}.rpt"
             else
                 printf "%s\n" "$LINE" | sed '{
-                    s/\(require .*\)/\1 || return 0/
-                    s/\(import .*\)/\1 || return 0/
-                    s/exit/return 0/
-
+                    s/\(require .*\)/\1 || exit 1/
+                    s/\(import .*\)/\1 || exit 1/
                 }' >> "${TEST_FILE}"
             fi
         done < <( awk '/^def/{printf "%s%s\n", "TEST=", $2;next}

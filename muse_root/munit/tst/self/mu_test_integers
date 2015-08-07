@@ -62,24 +62,20 @@ end
 # Test integer comparisons
 #======================================
 ## Integer > ref - Pass
-def Test-IntegerGreaterThan-True
+def Test-IntegerGreaterThan-Pass
     assert_greater_than_integer 100 101  "Test should have passed"
 end
 ## Integer greater than ref - Fail
-def Test-IntegerGreaterThan-False
+def Test-IntegerGreaterThan-Fail
     assert_greater_than_integer 101 100 "Fail because lesser"
 end
 ## Integer < ref - Pass
-def Test-IntegerLessThan-True
+def Test-IntegerLessThan-Pass
     assert_less_than_integer 100 99  "Test should have passed"
 end
 ## Integer < ref - Fail
-def Test-IntegerLessThan-False
+def Test-IntegerLessThan-Fail
     assert_less_than_integer 99 100 "Fail because greater"
-end
-## Integer < ref - Fail with msg
-def Test-IntegerLessThan-FalseWithMsg
-    assert_less_than_integer 99 100 "This test should prove false"
 end
 ## Integer <= - Pass
 def Test-IntegerLessThanOrEqual-Equal
