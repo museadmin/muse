@@ -140,7 +140,6 @@ include reporting.funcs
 printf "%s\n" "${HEADLINE}" | tee -a "${MU_MASTER_RPT}"
 
 mu_get_mid_line_offset "( MUNIT ) Test Report" OFS
-set +x
 printf "%-${OFS}s%s\n" "" "( MUNIT ) Test Report" | tee -a "${MU_MASTER_RPT}"
 mu_get_mid_line_offset "$(date)" OFS
 printf "%-${OFS}s%s\n" "" "$(date)" | tee -a "${MU_MASTER_RPT}"
