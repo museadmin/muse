@@ -1,0 +1,87 @@
+##############################################################
+##
+## Name         :   mu_test_strings
+## Author       :   Bradley Atkins
+## Description  :   Dev test suite for developing MUNIT
+## Date         :   02/08/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## This program is free software; you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, version 2 only.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program; if not, write to the Free Software
+## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
+## USA
+##
+##############################################################
+
+## Two strings are equal - Pass
+def Test-EqualStringLiterals-Pass
+    assert_equal_string "str1" "str1" "Test should have passed"
+end
+## Two strings are equal - Pass
+def Test-EqualStringLiteralAndVar-Pass
+    STR1="str1"
+    assert_equal_string "str1" "${STR1}" "Test should have passed"
+end
+## Two strings are equal - Fail
+def Test-EqualStrings-Fail
+    assert_equal_string "str1" "str2" "Fail because unequal"
+end
+## Two strings are unequal - Pass
+def Test-UnequalStrings-Pass
+    assert_not_equal_string "str1" "str2" "str1 and str2 - equal strings"
+end
+## Two strings are unequal - Fail
+def Test-UnequalStrings-Fail
+    assert_not_equal_string "str1" "str1" "Should not be equal strings"
+end
+## String > ref - Pass
+def Test-GreaterThanString-Pass
+    assert_greater_than_string "abc" "bcd" "Test should have passed"
+end
+## String > ref - Fail
+def Test-GreaterThanString-Fail
+    assert_greater_than_string "bcd" "abc" "Fail because lesser"
+end
+## String < ref - Pass
+def Test-LessThanString-True
+    assert_less_than_string "bcd" "abc" "Test should have passed"
+end
+## String < ref - Fail
+def Test-LessThanString-Fail
+    assert_less_than_string "abc" "bcd" "Fail because greater"
+end
+## Empty String - Pass
+def Test-EmptyString-Pass
+    assert_empty_string "" "Test should have passed"
+end
+## Empty String - Fail
+def Test-EmptyString-Fail
+    assert_empty_string "Test String" "Fail because not empty"
+end
+## Empty string but null - Pass
+def Test-EmptyStringWithNull-Pass
+    assert_empty_string 
+end
+## Non Empty string but null - Fail
+def Test-EmptyStringWithNull-Fail
+    assert_not_empty_string 
+end
+## Non Empty String - Pass
+def Test-NonEmptyString-Pass
+    assert_not_empty_string "Test String" "Test should have passed"
+end
+## NonEmpty String - Fail
+def Test-NonEmptyString-Fail
+    assert_not_empty_string "" "Fail because empty"
+end

@@ -1,0 +1,62 @@
+##############################################################
+##
+## Name         :   mu_test_floats
+## Author       :   Bradley Atkins
+## Description  :   Dev test suite for developing MUNIT
+## Date         :   02/08/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## This program is free software; you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, version 2 only.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program; if not, write to the Free Software
+## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
+## USA
+##
+##############################################################
+
+#======================================
+# Test floating point comparisons
+#======================================
+## Float = ref - Pass
+def Test-FloatEqual-Pass
+    assert_equal_float "1.235" "01.235" "Test should have passed"
+end
+## Float = ref - Fail
+def Test-FloatEqual-Fail
+    assert_equal_float "1.235" "02.235" "Fail because unequal"
+end
+## Float != ref - Pass
+def Test-FloatNotEqual-Pass
+    assert_not_equal_float "2.235" "01.235" "Test should have passed"
+end
+## Float != ref - Fail
+def Test-FloatNotEqual-Fail
+    assert_not_equal_float "1.235" "01.235" "Fail because equal"
+end
+## Float < ref - Pass
+def Test-FloatLessThan-Pass
+    assert_less_than_float "1.9" "1.8" "1.8 should test less than 1.9"
+end
+## Float < ref - Fail
+def Test-FloatLessThan-Fail
+    assert_less_than_float "1.8" "1.9" "Test should fail as 1.9 > 1.8"
+end
+## Float > ref - Pass
+def Test-FloatGreaterThan-Pass
+    assert_greater_than_float "1.8" "1.9" "Test should pass as 1.9 > 1.8"
+end
+## Float > ref - Fail
+def Test-FloatGreaterThan-Fail
+    assert_greater_than_float "1.9" "1.9" "Test should fail as 1.9 == 1.9"
+end
+

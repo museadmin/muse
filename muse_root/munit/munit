@@ -115,12 +115,6 @@ rm -rf "${MU_RPT}"/* || die "Cleardown of (${MU_RPT}) failed"
 mu_init
 
 #======================================
-# Create the map files
-#======================================
-mu_create_map_files
-[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Map file created (${MU_MUNIT_MAP})" "INFO"
-
-#======================================
 # Validate the command line
 #======================================
 validate_cmd_line "$@"
@@ -137,10 +131,24 @@ mu_create_test_files
 # Set some run vars
 #======================================
 printf "%s\n" "Errors:" > "${MU_TEST_BUF}"
-printf "%s\n" "Tests:" > "${MU_TEST_HED}"
 mu_gen_line "=" "${MU_HEAD_LINE_LEN}" HEADLINE
 
+#======================================
+# Print the report header
+#======================================
 include reporting.funcs
+printf "%s\n" "${HEADLINE}" | tee -a "${MU_MASTER_RPT}"
+
+mu_get_mid_line_offset "( MUNIT ) Test Report" OFS
+set +x
+printf "%-${OFS}s%s\n" "" "( MUNIT ) Test Report" | tee -a "${MU_MASTER_RPT}"
+mu_get_mid_line_offset "$(date)" OFS
+printf "%-${OFS}s%s\n" "" "$(date)" | tee -a "${MU_MASTER_RPT}"
+mu_get_mid_line_offset "Project - (${MU_CURRENT_PROJECT})" OFS
+printf "%-${OFS}s%s\n" "" "Project - (${MU_CURRENT_PROJECT})"
+
+printf "%s\n" "${HEADLINE}" | tee -a "${MU_MASTER_RPT}"
+
 #======================================
 # Run each test and create each report
 #======================================
@@ -151,43 +159,54 @@ do
     MU_TESTS=$(( MU_TESTS +1 ))
     THISTEST=${MU_RUN_ORDER[$MU_RUN_INDEX]}
 
-    printf "\t%-4d - %s\n" "${MU_TESTS}" "${THISTEST}" >> "${MU_TEST_HED}"
-
-    if ! "${MU_TMP}/${THISTEST}" 2> "${MU_ERROR_BUF}"
+    #======================================
+    # Print out each test name in order
+    #======================================
+    if ${MU_DISPLAY_TEST_LIST} 
     then
+        if ! "${MU_TEST_LINE_PRINTED}"
+        then
+            printf "%s\n" "Tests:" | tee -a "${MU_MASTER_RPT}"
+            MU_TEST_LINE_PRINTED=true
+        fi
+        printf "\t%-4d - %s\n" "${MU_TESTS}" "${THISTEST}" | tee -a "${MU_MASTER_RPT}"
+    fi
+
+    #======================================
+    # Run the test
+    #======================================
+    :>"${MU_STDERR_BUF}"
+    
+    "${MU_TMP}/${THISTEST}" > "${MU_STDOUT_BUF}" 2> "${MU_STDERR_BUF}"
+    
+    if [[ -s "${MU_STDERR_BUF}" ]]
+    then
+        #======================================
+        # The test hit a shell error, not a 
+        # raised error.
+        #======================================
         mu_set_error_index MU_ERROR_INDEX
         MU_ERRORS=$(( MU_ERRORS +1 ))
         printf "\n\t${MU_ERROR_INDEX} - %s\n" "${MU_RUN_ORDER[$MU_RUN_INDEX]}" >> "${MU_TEST_BUF}"
         while read LINE
         do
             printf "\t\t%s\n" "${LINE}" >> "${MU_TEST_BUF}"
-        done < "${MU_ERROR_BUF}"
+        done < "${MU_STDERR_BUF}"
     fi
+    
+    #======================================
+    # Archive stdout and stderr for test
+    #======================================
+    mv "${MU_STDOUT_BUF}" "${MU_RPT}/${THISTEST}.stdout"
+    mv "${MU_STDERR_BUF}" "${MU_RPT}/${THISTEST}.stderr"
 done
+echo
 
 #=====================================
 # Concat all of the reports into one
 #======================================
-[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Compiling reports" "INFO"
+[[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Tests completed. Compiling reports" "INFO"
 
-#======================================
-# Print the report header
-#======================================
-OFS=$(( MU_HEAD_LINE_LEN / 6 ))
-printf "%s\n" "${HEADLINE}" > "${MU_TEST_LOG}"
-printf "%-${OFS}s%s\n" "" "$(date): MUNIT Test Report" >> "${MU_TEST_LOG}"
-printf "%-${OFS}s%s\n" "" "Project - (${MU_CURRENT_PROJECT})" >> "${MU_TEST_LOG}"
-printf "%-${OFS}s%s\n" "" "(${MU_NUM_TESTS}) Tests, (_MU_ASSERTIONS_) Assertions, (_MU_FAILURES_) Failures. (_MU_ERRORS_) Errors" >> "${MU_TEST_LOG}"
-printf "%s\n" "${HEADLINE}" >> "${MU_TEST_LOG}"
-
-#======================================
-# List of tests that were run
-#======================================
-if ${MU_DISPLAY_TEST_LIST}
-then
-    cat "${MU_TEST_HED}" >> "${MU_TEST_LOG}"
-    echo >> "${MU_TEST_LOG}"
-fi
 
 #======================================
 # Handle adding any failures to rpt
@@ -215,7 +234,7 @@ do
         #======================================
         if ! "${MU_FAILURE_LINE_PRINTED}"
         then
-            printf "%s\n" "Failures:" >> "${MU_TEST_LOG}"
+            printf "%s\n" "Failures:" >> "${MU_TEST_LOG}" | tee -a "${MU_MASTER_RPT}"
             MU_FAILURE_LINE_PRINTED=true
         fi
         #======================================
@@ -224,7 +243,7 @@ do
         printf "\n\t$(( MU_FAIL_INDEX += 1 )) - %s\n" "${MU_RUN_ORDER[$MU_RUN_INDEX]}" >> "${MU_TEST_LOG}"
         while read LINE
         do
-            printf "\t\t%s\n" "${LINE}" >> "${MU_TEST_LOG}"
+            printf "\t\t%s\n" "${LINE}" >> "${MU_TEST_LOG}" | tee -a "${MU_MASTER_RPT}"
         done < "${THISRPT}"
     fi
     #======================================
@@ -237,26 +256,26 @@ do
 done
 printf "\n" >> "${MU_TEST_LOG}"
 
-#======================================
-# Update the header with the metrics
-#======================================
-sed -i '{
-    s/_MU_ASSERTIONS_/'${MU_ASSERTIONS}'/
-    s/_MU_FAILURES_/'${MU_FAILURES}'/
-    s/_MU_ERRORS_/'${MU_ERRORS}'/
-}' "${MU_TEST_LOG}"
 
 #======================================
 # Display the test report
 #======================================
-clear
 [[ ${MU_ERRORS} -gt 0 ]] && grep -v -A1 '^[[:blank:]]*$' "${MU_TEST_BUF}" | grep -v '^--$' >> "${MU_TEST_LOG}"
-grep -v -A1 '^[[:blank:]]*$' "${MU_TEST_LOG}" | grep -v '^--$'
+grep -v -A1 '^[[:blank:]]*$' "${MU_TEST_LOG}" | grep -v '^--$' | tee -a "${MU_MASTER_RPT}"
 
 if ${MU_DISPLAY_TEST_LIST} || [[ ${MU_ERRORS} -gt 0 ]] || [[ ${MU_FAILURES} -gt 0 ]]
 then
-    printf "%s\n" "${HEADLINE}"
+    printf "%s\n" "${HEADLINE}" | tee -a "${MU_MASTER_RPT}"
 fi
+
+RESSTR="(${MU_NUM_TESTS}) Tests, (${MU_ASSERTIONS}) Assertions, (${MU_FAILURES}) Failures. (${MU_ERRORS}) Errors"
+mu_get_mid_line_offset "${RESSTR}" OFS
+printf "%-${OFS}s%s\n" "" "${RESSTR}" | tee -a "${MU_MASTER_RPT}"
+printf "%s\n" "${HEADLINE}" | tee -a "${MU_MASTER_RPT}"
+
+#======================================
+# Report completion and exit
+#======================================
 [[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Run complete for - (${MU_RUNID})" "INFO"
 
 

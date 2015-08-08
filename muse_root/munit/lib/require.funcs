@@ -27,9 +27,9 @@
 
 ##############################################################
 ##
-## Name         :   require
+## Name         :   require_regular_file
 ## Author       :   Bradley Atkins
-## Description  :   Confirm a required file exists
+## Description  :   Confirm a required regular file exists
 ## Date         :   04/08/2015
 ## Args         :   1 - File name
 ## Status       :   Reviewed    [n]
@@ -37,7 +37,36 @@
 ##                  Released    [n]
 ##                  Disabled    [n]
 ##############################################################
-require()
+require_regular_file()
+{
+    local TF= 
+    #======================================
+    # See if we can find the file required
+    #======================================
+    mu_find_file "${1}" TF
+    [[ -f "${TF}" ]] && return 0
+
+    if [[ "${MU_REQUIRE_DEFAULT}" == "ERR" ]]
+    then
+        raise_error "Required file (${1}) not found"
+    else
+        raise_failure "Required file (${1}) not found"
+    fi
+    return 1
+} 
+##############################################################
+##
+## Name         :   require_file
+## Author       :   Bradley Atkins
+## Description  :   Confirm a required file of any type, exists
+## Date         :   04/08/2015
+## Args         :   1 - File name
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+require_file()
 {
     local TF= 
     #======================================
@@ -54,6 +83,87 @@ require()
     fi
     return 1
 } 
+##############################################################
+##
+## Name         :   require_dir
+## Author       :   Bradley Atkins
+## Description  :   Confirm a required directory exists
+## Date         :   04/08/2015
+## Args         :   1 - File name
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+require_dir()
+{
+    #======================================
+    # See if we can find the file required
+    #======================================
+    [[ -d "${1}" ]] && return 0
+
+    if [[ "${MU_REQUIRE_DEFAULT}" == "ERR" ]]
+    then
+        raise_error "Required directory (${1}) not found"
+    else
+        raise_failure "Required directory (${1}) not found"
+    fi
+    return 1
+} 
+##############################################################
+##
+## Name         :   require_running_process
+## Author       :   Bradley Atkins
+## Description  :   Confirm a process is running
+## Date         :   08/08/2015
+## Args         :   1 - Process name
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+require_running_process()
+{
+    if pgrep "${1}" >/dev/null 2>&1 
+    then
+        return 0
+    else
+        if [[ "${MU_REQUIRE_DEFAULT}" == "ERR" ]]
+        then
+            raise_error "Required process (${1}) not running"
+        else
+            raise_failure "Required process (${1}) not running"
+        fi
+    fi
+    return 1
+}
+##############################################################
+##
+## Name         :   require_which_application
+## Author       :   Bradley Atkins
+## Description  :   Confirm an application is known to which 
+## Date         :   08/08/2015
+## Args         :   1 - Application name
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+require_which_application()
+{
+    if which "${1}" >/dev/null 2>&1
+    then
+        return 0
+    else
+        if [[ "${MU_REQUIRE_DEFAULT}" == "ERR" ]]
+        then
+            raise_error "Required application (${1}) not found"
+        else
+            raise_failure "Required application (${1}) not found"
+        fi
+    fi
+    return 1
+}
+
+
 ##############################################################
 ##
 ## Name         :   import

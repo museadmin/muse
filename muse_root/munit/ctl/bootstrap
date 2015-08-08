@@ -15,7 +15,7 @@ set -a
     #======================================
     # MUNIT test definitions
     #======================================
-    eval MU_MUNIT_ROOT="${MU_MAP_DIRS[1]}"
+    MU_MUNIT_ROOT=$(echo "$(cd "$(dirname "$0")"; pwd)")
 
     #======================================
     # Path to MUNIT libraries
@@ -27,8 +27,10 @@ set -a
     #======================================
     # MUNIT control files
     #======================================
-    MU_TMP="/var/tmp/munit/tmp"
-    MU_RPT="/var/tmp/munit/rpt"
+    MU_ROOT="/var/tmp/munit"
+    MU_TMP="${MU_ROOT}/tmp"
+    MU_RPT="${MU_ROOT}/rpt"
+    MU_EXP="${MU_ROOT}/exp"
     MU_MUNIT_MAP="${MU_TMP}/mu_test_map"
 
     #======================================
@@ -37,20 +39,23 @@ set -a
     MU_TEST_LOG="${MU_TMP}/mu_test_log"
     MU_TEST_BUF="${MU_TMP}/mu_test_buf"
     MU_TEST_HED="${MU_TMP}/mu_test_hed"
-    MU_ERROR_BUF="${MU_TMP}/mu_error_buf"
+    MU_STDERR_BUF="${MU_TMP}/mu_error_buf"
+    MU_STDOUT_BUF="${MU_TMP}/mu_stdout_buf"
     MU_ERROR_IDX="${MU_TMP}/mu_error_idx"   ## Index for error report
+    MU_MASTER_RPT="${MU_RPT}/mu_master_rpt"
 
     #======================================
     # Global Constants
     #======================================
     MC_NAME_SEP="."
-    MU_MENU_LINE_LEN=25
+    MU_MENU_LINE_LEN=25                     ## Keep as odd numbers for centering
     MU_HEAD_LINE_LEN=75
 
     #======================================
-    # Run Array for Test names
+    # Run Arrays 
     #======================================
     declare -a MU_RUN_ORDER
+    declare -a MU_MAP_DIRS
 
 ##############################################################
 ##
@@ -70,15 +75,18 @@ mu_validate_environment()
     [[ "${MU_LIB}" =~ ^/.*/lib ]] || die " MU_LIB validation failed (${FUNCNAME})"
     [[ "${MU_CTL}" =~ ^/.*/ctl ]] || die "MU_CTL validation failed (${FUNCNAME})"
     [[ "${MU_TST}" =~ ^/.*/tst ]] || die "MU_CTL validation failed (${FUNCNAME})"
-    [[ "${MU_TMP}" =~ ^/.*/munit/tmp ]] || die "MU_TMP validation failed (${FUNCNAME})"
+    [[ "${MU_TMP}" =~ ^/.*/tmp ]] || die "MU_TMP validation failed (${FUNCNAME})"
+    [[ "${MU_EXP}" =~ ^/.*/exp ]] || die "MU_EXP validation failed (${FUNCNAME})"
     [[ "${MU_MUNIT_MAP}" =~ ^/.*/mu_test_map ]] || die "MU_MUNIT_MAP validation failed (${FUNCNAME})"
     [[ "${MU_TEST_LOG}" =~ ^/.*/mu_test_log ]] || die "MU_TEST_LOG validation failed (${FUNCNAME})"
     [[ "${MU_TEST_BUF}" =~ ^/.*/mu_test_buf ]] || die "MU_TEST_BUF validation failed (${FUNCNAME})"
     [[ "${MU_TEST_HED}" =~ ^/.*/mu_test_hed ]] || die "MU_TEST_HED validation failed (${FUNCNAME})"
-    [[ "${MU_ERROR_BUF}" =~ ^/.*/mu_error_buf ]] || die "MU_ERROR_BUF validation failed (${FUNCNAME})"
+    [[ "${MU_STDERR_BUF}" =~ ^/.*/mu_error_buf ]] || die "MU_ERROR_BUF validation failed (${FUNCNAME})"
+    [[ "${MU_MASTER_RPT}" =~ ^/.*/mu_master_rpt ]] || die "MU_MASTER_RPT validation failed (${FUNCNAME})"
     [[ -n "${MC_NAME_SEP}" ]] || die "MC_NAME_SEP validation failed (${FUNCNAME})"
     [[ "${MU_MENU_LINE_LEN}" =~ ^[[:digit:]]+$ ]] || die "MU_MENU_LINE_LEN validation failed (${FUNCNAME})"
     [[ "${MU_HEAD_LINE_LEN}" =~ ^[[:digit:]]+$ ]] || die "MU_HEAD_LINE_LEN validation failed (${FUNCNAME})"
+
     MU_ERRORS=0
     MU_FAILURES=0
     MU_TESTS=0
@@ -93,6 +101,7 @@ mu_validate_environment()
     #======================================
     # Reporting
     #======================================
+    MU_TEST_LINE_PRINTED=false
     MU_FAILURE_LINE_PRINTED=false
     MU_ERROR_LINE_PRINTED=false
 }
@@ -110,10 +119,19 @@ mu_validate_environment()
 ##############################################################
 mu_init()
 {
+    #======================================
+    # Create the runtime directories
+    #======================================
     mkdir -p "${MU_TMP}" 2>/dev/null 
     mkdir -p "${MU_RPT}" 2>/dev/null
+    mkdir -p "${MU_EXP}" 2>/dev/null
     [[ -d "${MU_TMP}" ]] || die "Failed to create tmp dir (${MU_TMP}) (${FUNCNAME})"
     [[ -d "${MU_RPT}" ]] || die "Failed to create tmp dir (${MU_RPT}) (${FUNCNAME})"
+    [[ -d "${MU_EXP}" ]] || die "Failed to create tmp dir (${MU_EXP}) (${FUNCNAME})"
+    
+    #======================================
+    # Initialise persistent global vars
+    #======================================
     printf "%s" "0" > "${MU_ERROR_IDX}"
 }
 ##############################################################
@@ -157,17 +175,31 @@ mu_find_file()
 {
     [[ -n "${1}" ]] || die "Usage. Arg[1]. File name expected  (${FUNCNAME})"
     [[ -n "${2}" ]] || die "Usage. Arg[2]. Variable name expected  (${FUNCNAME})"
-    local FPATH=
-    [[ -r "${MU_MUNIT_MAP}" ]] || die "Failed to find readable MUNIT map file (${MU_MUNIT_MAP})  (${FUNCNAME})"
+    local FPATH= dir=
+    
+    #======================================
+    # First search locally in MUNIT
+    #======================================
+    FPATH=$(find "${MU_MUNIT_ROOT}" -name "${1}" 2>/dev/null)
+    if [[ -n "${FPATH}" ]]
+    then
+        eval "${2}"="${FPATH}"
+        return
+    fi
 
-    while read FPATH
+    #======================================
+    # Now traverse any directories for proj
+    #======================================
+    for dir in ${MU_MAP_DIRS[@]}
     do
-        if [[ "$(basename ${FPATH})" == "${1}" ]] 
+        FPATH=$(find "${dir}" -name "${1}" 2>/dev/null)
+        if [[ -n "${FPATH}" ]]
         then
-            eval ${2}="${FPATH}"
-            break
+            eval "${2}"="${FPATH}"
+            return
         fi
-    done < "${MU_MUNIT_MAP}"
+    done
+
 }
 ##############################################################
 ##
@@ -199,7 +231,7 @@ include()
 ## Author       :   Bradley Atkins
 ## Description  :   Create a tmp file
 ## Date         :   02/08/2015
-## Args         :   1 - Calling function
+## Args         :   1 - Caller defined name
 ##                  2 - Variable name to return path to file
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
@@ -215,6 +247,34 @@ mu_get_tmp_file()
     while [[ -f "${FILE}" ]] 
     do
         FILE="${MU_TMP}/${1}.${RANDOM}"
+    done
+
+    :>"${FILE}"
+
+    eval ${2}='"${FILE}"'
+}
+##############################################################
+##
+## Name         :   mu_get_exp_file
+## Author       :   Bradley Atkins
+## Description  :   Create a tmp file for new expected results
+## Date         :   08/08/2015
+## Args         :   1 - Caller defined name
+##                  2 - Variable name to return path to file
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+mu_get_exp_file()
+{
+    [[ $# -eq 2 ]] || die "Usage. Arg count. 2 expected (${FUNCNAME})"
+    [[ -n "${1}" ]] || die "Usage. Arg[1]. Caller name expected"
+    [[ -n "${2}" ]] || die "Variable name expected"
+
+    local FILE="${MU_EXP}/${1}.exp.${RANDOM}"
+    while [[ -f "${FILE}" ]] 
+    do
+        FILE="${MU_EXP}/${1}.exp.${RANDOM}"
     done
 
     :>"${FILE}"
@@ -307,7 +367,7 @@ validate_cmd_line()
     #======================================
     # Validate
     #======================================
-    local FILE= OPT= PRJS= HLINE=
+    local FILE= OPT= PRJS= HLINE= ENV=
     mu_gen_line "=" "${MU_MENU_LINE_LEN}" HLINE
 
     while [[ $# -gt 0 ]]
@@ -358,7 +418,7 @@ validate_cmd_line()
                                 #======================================
                                 MU_CURRENT_PROJECT="${OPT}"
                                 clear
-                                TESTS="$(ls -f tst/"${MU_CURRENT_PROJECT}"/mu_test* 2>/dev/null | awk '{print $NF}' FS='/')"
+                                TESTS="$(ls -f tst/"${MU_CURRENT_PROJECT}"/bin/mu_test* 2>/dev/null | awk '{print $NF}' FS='/')"
                                 if [[ -n "${TESTS}" ]] 
                                 then
                                     echo "${HLINE}"
@@ -413,9 +473,23 @@ validate_cmd_line()
             ;;
         esac
     done
-    
+
     #======================================
-    # Confirm they can all be found
+    # See if the project has an env file
+    #======================================
+    ENV=$(find "${MU_TST}/${MU_CURRENT_PROJECT}/env" -name "${MU_CURRENT_PROJECT}.env" 2>/dev/null)
+    if [[ -n "${ENV}" ]]
+    then
+        if [[ -r "${ENV}" ]]
+        then
+            source "${ENV}" || die "Source failed for project env file (${ENV})"
+        else
+            die "Project env file (${ENV}) not readable"
+        fi
+    fi
+
+    #======================================
+    # Confirm all test names can be found
     #======================================
     for FILE in ${MU_TEST_NAMES}
     do
@@ -505,7 +579,7 @@ mu_check_test_suite_format()
 ##############################################################
 mu_create_test_files()
 {
-    local TEST_SUITE= TMPFILE1= TMPFILE2= LINE= RCNT= UCNT=
+    local TEST_SUITE= TMPFILE1= TMPFILE2= LINE= RCNT= UCNT= DCNT=-1
     #======================================
     # Loop through all test suites
     #======================================
@@ -545,6 +619,13 @@ mu_create_test_files()
                 printf "%s\n" "export MU_RPT=${MU_RPT}" >> "${TEST_FILE}"
                 printf "%s\n" "export MU_ERROR_IDX=${MU_ERROR_IDX}" >> "${TEST_FILE}"
                 printf "%s\n" "export MU_TEST_BUF=${MU_TEST_BUF}" >> "${TEST_FILE}"
+
+                [[ "${#MU_MAP_DIRS[@]}" -gt 0 ]] && printf "%s\n" "declare -a MU_MAP_DIRS" >> "${TEST_FILE}"
+                for dir in ${MU_MAP_DIRS[@]}
+                do
+                    printf "%s\n" "MU_MAP_DIRS[$(( DCNT += 1))]=${dir}" >> "${TEST_FILE}"
+                done
+                
                 #======================================
                 # Add source of all libraries
                 #======================================
@@ -562,10 +643,7 @@ mu_create_test_files()
                 printf "%s" "0 0 0" > "${MU_RPT}/${TEST_NAME}.sts"
                 :>"${MU_RPT}/${TEST_NAME}.rpt"
             else
-                printf "%s\n" "$LINE" | sed '{
-                    s/\(require .*\)/\1 || exit 1/
-                    s/\(import .*\)/\1 || exit 1/
-                }' >> "${TEST_FILE}"
+                printf "%s\n" "$LINE" >> "${TEST_FILE}"
             fi
         done < <( awk '/^def/{printf "%s%s\n", "TEST=", $2;next}
                         !/^end/{printf "%s\n", $0}
@@ -592,29 +670,21 @@ mu_create_test_files()
 }
 ##############################################################
 ##
-## Name         :   mu_log_failure
+## Name         :   mu_get_mid_line_offset
 ## Author       :   Bradley Atkins
-## Description  :   Write a failure to the report
-## Date         :   03/08/2015
-## Args         :   1 - MSG
+## Description  :   Calculate the offset required to centre a 
+##                  string in the report header.
+## Date         :   08/08/2015
+## Args         :   1 - String length
+##                  2 - Var to return offset
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
 ##############################################################
-mu_log_failure()
+mu_get_mid_line_offset()
 {
-    #======================================
-    # Print the failures header line
-    #======================================
-    if ! ${MU_FAILURE_LINE_PRINTED}
-    then
-        printf "%s\n" "Failures:" > "${MU_TEST_LOG}"
-    fi
-
-    #======================================
-    # Print the failure details
-    #======================================
-    printf "%s\n" "(${MU_FAILURES})" >> "${MU_TEST_LOG}"
+    eval "${2}"=$(( $(( MU_HEAD_LINE_LEN - ${#1} )) / 2 ))   
 }
+
 
 set +a

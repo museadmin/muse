@@ -1,0 +1,106 @@
+##############################################################
+##
+## Name         :   mu_test_integers
+## Author       :   Bradley Atkins
+## Description  :   Dev test suite for developing MUNIT
+## Date         :   02/08/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## This program is free software; you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, version 2 only.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program; if not, write to the Free Software
+## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
+## USA
+##
+##############################################################
+
+#======================================
+# Test integer equality
+#======================================
+## Equal integers - Pass
+def Test-EqualIntegers-Equal
+    assert_equal_integer 100 100  "Test should have passed"
+end
+## Equal integer literal and integer var - Pass
+def Test-EqualIntegerAndVar-Equal
+    INT=100
+    assert_equal_integer 100 ${INT}  "Test should have passed"
+end
+## Equal integers - Fail
+def Test-EqualIntegerLiterals-Unequal "Fail because not equal"
+    assert_equal_integer 100 101
+end
+## Equal integer literal and integer var - Fail
+def Test-EqualIntegerAndVar-Unequal
+    INT=101
+    assert_equal_integer 100 ${INT} "Fail because not equal"
+end
+## Unequal integers - Pass
+def Test-UnequalIntegers-NotEqual
+    assert_not_equal_integer 100 101  "Test should have passed"
+end
+## Unequal integers - Fail
+def Test-UnequalIntegers-Equal
+    assert_not_equal_integer 100 100 "Fail because equal"
+end
+## Unequal integer and null - Pass
+def Test-UnequalIntegers-NotSet
+    assert_not_equal_integer 100 
+end
+
+#======================================
+# Test integer comparisons
+#======================================
+## Integer > ref - Pass
+def Test-IntegerGreaterThan-Pass
+    assert_greater_than_integer 100 101  "Test should have passed"
+end
+## Integer greater than ref - Fail
+def Test-IntegerGreaterThan-Fail
+    assert_greater_than_integer 101 100 "Fail because lesser"
+end
+## Integer < ref - Pass
+def Test-IntegerLessThan-Pass
+    assert_less_than_integer 100 99  "Test should have passed"
+end
+## Integer < ref - Fail
+def Test-IntegerLessThan-Fail
+    assert_less_than_integer 99 100 "Fail because greater"
+end
+## Integer <= - Pass
+def Test-IntegerLessThanOrEqual-Equal
+    assert_less_than_or_equal_integer 21 21  "Test should have passed"
+end
+## Integer <= - Pass
+def Test-IntegerLessThanOrEqual-Less
+    assert_less_than_or_equal_integer 21 20  "Test should have passed"
+end
+## Integer <= - Fail
+def Test-IntegerLessThanOrEqual-Greater
+    assert_less_than_or_equal_integer 21 22 "Fail because greater"
+end
+## Integer >= - Pass
+def Test-IntegerGreaterThanOrEqual-Equal
+    assert_greater_than_or_equal_integer 21 21  "Test should have passed"
+end
+## Integer >= - Pass
+def Test-IntegerGreaterThanOrEqual-Greater
+    assert_greater_than_or_equal_integer 20 21  "Test should have passed"
+end
+## Integer >= - Fail
+def Test-IntegerGreaterThanOrEqual-Less
+    assert_greater_than_or_equal_integer 20 19 "Fail because less than"
+end
+
+
+
