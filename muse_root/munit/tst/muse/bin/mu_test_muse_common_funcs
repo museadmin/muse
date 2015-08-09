@@ -1,10 +1,9 @@
 ##############################################################
 ##
-## Name         :   mu_test_keywords
+## Name         :   mu_test_muse_common_funcs
 ## Author       :   Bradley Atkins
-## Description  :   Test the function m_get_file_data in file
-##                  test.res
-## Date         :   05/08/2015
+## Description  :   Test the functions in muse lib common.funcs
+## Date         :   09/08/2015
 ## Args         :   
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
@@ -26,37 +25,41 @@
 ## USA
 ##
 ##############################################################
-def Test-UnitTestOfLibraryFunction
+
+#======================================
+# Test of m_get_file_data 
+#======================================
+def Test-m_get_file_data
    
     #======================================
     # Require our Files under Test
     #======================================
-    require_file test.res
-    import test.res
+    require_file common.funcs
+    import common.funcs
     require_file funky_dirs.tar
-    require_file UnitTestOfLibraryFunction-1.exp
-    require_file UnitTestOfLibraryFunction-2.exp
-    require_file UnitTestOfLibraryFunction-3.exp
-    require_file UnitTestOfLibraryFunction-4.exp
+    require_file m_get_file_data-1.exp
+    require_file m_get_file_data-2.exp
+    require_file m_get_file_data-3.exp
+    require_file m_get_file_data-4.exp
 
     #======================================
     # All available so assign to VARS
     #======================================
-    mu_get_exp_file UnitTestOfLibraryFunction-1 TMPEXP1
-    mu_get_exp_file UnitTestOfLibraryFunction-2 TMPEXP2
-    mu_get_exp_file UnitTestOfLibraryFunction-3 TMPEXP3
-    mu_get_exp_file UnitTestOfLibraryFunction-4 TMPEXP4
+    mu_get_exp_file m_get_file_data-1 TMPEXP1
+    mu_get_exp_file m_get_file_data-2 TMPEXP2
+    mu_get_exp_file m_get_file_data-3 TMPEXP3
+    mu_get_exp_file m_get_file_data-4 TMPEXP4
     mu_find_file funky_dirs.tar TARFILE
-    mu_find_file UnitTestOfLibraryFunction-1.exp EXP1
-    mu_find_file UnitTestOfLibraryFunction-2.exp EXP2
-    mu_find_file UnitTestOfLibraryFunction-3.exp EXP3
-    mu_find_file UnitTestOfLibraryFunction-4.exp EXP4
+    mu_find_file m_get_file_data-1.exp EXP1
+    mu_find_file m_get_file_data-2.exp EXP2
+    mu_find_file m_get_file_data-3.exp EXP3
+    mu_find_file m_get_file_data-4.exp EXP4
 
     #======================================
     # Create the directory structure for 
     # the function to run against
     #======================================
-    DIROOT="${MU_TMP}/UnitTestOfLibraryFunction"
+    DIROOT="${MU_TMP}/m_get_file_data"
     mkdir "${DIROOT}" || raise_error "mkdir (${DIROOT}) failed"
     cd "${DIROOT}" || raise_error "cd to (${DIROOT}) failed"
     cp "${TARFILE}" . || raise_error "File copy failed (${TARFILE})"
@@ -87,5 +90,34 @@ def Test-UnitTestOfLibraryFunction
     assert_is_not_different "${TMPEXP4}" "${EXP4}" "Test 4 failed"
 
     cd - >/dev/null 2>&1
+
+end
+#======================================
+# Test for m_get_md5sum
+#======================================
+def Test-m_get_md5sum
+   
+    #======================================
+    # Require our Files under Test
+    #======================================
+    require_regular_file common.funcs
+    import common.funcs
+    require_regular_file muse_mapper.funcs
+    import muse_mapper.funcs
+    require_regular_file m_get_md5sum.txt
+    require_regular_file m_get_md5sum.exp
+
+    #======================================
+    # Tweak the environment for MUSE find
+    #======================================
+    export M_ROOT="${MU_TST}"
+    mu_find_file m_get_md5sum.exp EXP
+
+    #======================================
+    # Do the test
+    #======================================
+    m_get_md5sum m_get_md5sum.txt MD
+    
+    assert_equal_string "${MD}" $(cat "${EXP}")
 
 end

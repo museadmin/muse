@@ -1,0 +1,8 @@
+ drwxrwxr-x mailcontrol mailcontrol 4096  m_test1_dirs/a b|c>d,t
+ drwxrwxr-x mailcontrol mailcontrol 4096  m_test1_dirs/ab\nd
+ drwxrwxr-x mailcontrol mailcontrol 4096  m_test1_dirs/ab\nd/l1
+ drwxrwxr-x mailcontrol mailcontrol 4096  m_test1_dirs/ab\nd/l1/l2
+ drwxrwxr-x mailcontrol mailcontrol 4096  m_test1_dirs/ab\nd/l1/l2/l3
+ drwxrwxr-x mailcontrol mailcontrol 4096  m_test1_dirs/ab\tn
+ drwxrwxr-x mailcontrol mailcontrol 4096  m_test1_dirs/d space
+ drwxrwxr-x mailcontrol mailcontrol 4096  m_test1_dirs/normal

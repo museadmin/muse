@@ -1,0 +1,45 @@
+##############################################################
+##
+## Name         :   mu_test_muse_files
+## Author       :   mailcontrol
+## Description  :   Confirm all libraries etc. exist
+## Date         :   09/08/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##                  Disabled    [n]
+##############################################################
+
+## Confirm we have all of our libraries installed
+
+#======================================
+# Confirm we have all of our libraries 
+# installed
+#======================================
+def Test-RequireAllLibraries-Pass
+    require_regular_file "db.funcs"
+    require_regular_file "print.funcs"
+    require_regular_file "cnxn.funcs"
+    require_regular_file "common.funcs"
+    require_regular_file "plugin.funcs"
+    require_regular_file "sm.funcs"
+    require_regular_file "time.funcs"
+    require_regular_file "utils.funcs"
+    require_regular_file "master.funcs"
+    require_regular_file "slave.funcs"
+    require_regular_file "muse_mapper.funcs"
+end
+#======================================
+# Confirm all env files present
+#======================================
+def Test-RequireAllEnvFiles-Pass
+    require_regular_file "msg.env"
+    require_regular_file "master.env"
+    require_regular_file "slave.env"
+    require_regular_file "defaults.env"
+end
+#======================================
+#
+#======================================
+

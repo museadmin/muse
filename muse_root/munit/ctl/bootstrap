@@ -8,6 +8,21 @@
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
+##
+## This program is free software; you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, version 2 only.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program; if not, write to the Free Software
+## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
+## USA
+##
 ##############################################################
 
 set -a
@@ -57,6 +72,7 @@ set -a
     declare -a MU_RUN_ORDER
     declare -a MU_MAP_DIRS
 
+set +a
 ##############################################################
 ##
 ## Name         :   mu_validate_environment
@@ -153,53 +169,11 @@ usage()
     printf "\n%-${OFS}s%s\n\n" "" "MUNIT Usage Guide"
     printf "\t%s\n" "usage: ${0##*/} [-option] [file] [file] ..."
     printf "\n"
-    printf "\t%s\n" "${0##*/} <test name/s>  :Run test suite/s"
-    printf "\t%s\n" "${0##*/} -s             :Select project and test/s"
+    printf "\t%s\n" "${0##*/} <test name/s>  : Run test suite/s"
+    printf "\t%s\n" "${0##*/} -a <name>      : Create a new project structure"
+    printf "\t%s\n" "${0##*/} -t             : Select project and test/s"
     printf "\n%s\n" "${HEADLINE}"
     exit
-}
-##############################################################
-##
-## Name         :   mu_find_file
-## Author       :   Bradley Atkins
-## Description  :   Find a file. If no filter set then first 
-##                  search MUNIT then MUSE. 
-## Date         :   02/08/2015
-## Args         :   1 - file name
-##                  2 - Variable name for return value
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##############################################################
-mu_find_file()
-{
-    [[ -n "${1}" ]] || die "Usage. Arg[1]. File name expected  (${FUNCNAME})"
-    [[ -n "${2}" ]] || die "Usage. Arg[2]. Variable name expected  (${FUNCNAME})"
-    local FPATH= dir=
-    
-    #======================================
-    # First search locally in MUNIT
-    #======================================
-    FPATH=$(find "${MU_MUNIT_ROOT}" -name "${1}" 2>/dev/null)
-    if [[ -n "${FPATH}" ]]
-    then
-        eval "${2}"="${FPATH}"
-        return
-    fi
-
-    #======================================
-    # Now traverse any directories for proj
-    #======================================
-    for dir in ${MU_MAP_DIRS[@]}
-    do
-        FPATH=$(find "${dir}" -name "${1}" 2>/dev/null)
-        if [[ -n "${FPATH}" ]]
-        then
-            eval "${2}"="${FPATH}"
-            return
-        fi
-    done
-
 }
 ##############################################################
 ##
@@ -227,130 +201,6 @@ include()
 }
 ##############################################################
 ##
-## Name         :   mu_get_tmp_file
-## Author       :   Bradley Atkins
-## Description  :   Create a tmp file
-## Date         :   02/08/2015
-## Args         :   1 - Caller defined name
-##                  2 - Variable name to return path to file
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##############################################################
-mu_get_tmp_file()
-{
-    [[ $# -eq 2 ]] || die "Usage. Arg count. 2 expected (${FUNCNAME})"
-    [[ -n "${1}" ]] || die "Usage. Arg[1]. Caller name expected"
-    [[ -n "${2}" ]] || die "Variable name expected"
-
-    local FILE="${MU_TMP}/${1}.${RANDOM}"
-    while [[ -f "${FILE}" ]] 
-    do
-        FILE="${MU_TMP}/${1}.${RANDOM}"
-    done
-
-    :>"${FILE}"
-
-    eval ${2}='"${FILE}"'
-}
-##############################################################
-##
-## Name         :   mu_get_exp_file
-## Author       :   Bradley Atkins
-## Description  :   Create a tmp file for new expected results
-## Date         :   08/08/2015
-## Args         :   1 - Caller defined name
-##                  2 - Variable name to return path to file
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##############################################################
-mu_get_exp_file()
-{
-    [[ $# -eq 2 ]] || die "Usage. Arg count. 2 expected (${FUNCNAME})"
-    [[ -n "${1}" ]] || die "Usage. Arg[1]. Caller name expected"
-    [[ -n "${2}" ]] || die "Variable name expected"
-
-    local FILE="${MU_EXP}/${1}.exp.${RANDOM}"
-    while [[ -f "${FILE}" ]] 
-    do
-        FILE="${MU_EXP}/${1}.exp.${RANDOM}"
-    done
-
-    :>"${FILE}"
-
-    eval ${2}='"${FILE}"'
-}
-##############################################################
-##
-## Name         :   mu_clean_file
-## Author       :   Bradley Atkins
-## Description  :   Strip out comments etc from a file
-##                  If source and dest are the same then overwrite
-## Date         :   02/08/2015
-## Args         :   1 - Fully qualified file name (source)
-##                  2 - Fully qualified file name (output)
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##############################################################
-mu_clean_file()
-{
-    [[ $# -eq 2 ]] || die "Error: Usage args (${FUNCNAME})"
-
-    local SRC="${1}" DST="${2}"
-
-    #======================================
-    # Name can be basename or FQN. If base 
-    # then find it
-    #======================================
-    [[ -f "${1}" ]] || mu_find_file "${1}" SRC
-    [[ -f "${2}" ]] || mu_find_file "${2}" DST
-
-    #======================================
-    # Clean the file of comments etc.
-    #======================================
-    if [[ "${SRC}" == "${DST}" ]] 
-    then
-        local FILE
-        mu_get_tmp_file ${FUNCNAME} FILE 
-        sed 's/[#].*$//g' "${SRC}" | awk NF > "${FILE}"
-        for s in ${PIPESTATUS[@]}; do [[ $s -eq 0 ]] || die "Error:Pipe failed 1 (${FUNCNAME})" ; done 
-        mv "${FILE}" > "${SRC}" || die "Failed to overwrite target file (${DST}) (${FUNCNAME})"
-    else
-        sed 's/[#].*$//g' "${SRC}" | awk NF > "${DST}" || die "Failed to overwrite target file (${DST}) (${FUNCNAME})"
-        for s in ${PIPESTATUS[@]}; do [[ $s -eq 0 ]] || die "Error:Pipe failed 2 (${FUNCNAME})" ; done 
-    fi
-}
-##############################################################
-##
-## Name         :   mu_gen_line
-## Author       :   Bradley Atkins
-## Description  :   Generate a line of character $1
-## Date         :   06/08/2015
-## Args         :   1 - Line type
-##                  2 - Length of line
-##                  3 - VAR to return line in
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##                  Disabled    [n]
-##############################################################
-mu_gen_line()
-{
-    [[ $# -eq 3 ]] || die "Usage. Arg count. 3 expected (${FUNCNAME})"
-    [[ "${2}" =~ ^[[:digit:]]+$ ]] || die "Usage. Arg[2]. Integer expected (${FUNCNAME})"
-
-    local L=
-    for I in $(seq "${2}")
-    do
-        L="${L}${1}"
-    done
-
-    eval "${3}"='${L}'
-}
-##############################################################
-##
 ## Name         :   validate_cmd_line
 ## Author       :   Bradley Atkins
 ## Description  :   Check the cmd line is valid
@@ -367,21 +217,72 @@ validate_cmd_line()
     #======================================
     # Validate
     #======================================
-    local FILE= OPT= PRJS= HLINE= ENV=
+    local FILE= OPT= PRJS= HLINE= ENV= PNAME=
     mu_gen_line "=" "${MU_MENU_LINE_LEN}" HLINE
 
     while [[ $# -gt 0 ]]
     do
         case ${1} in
+            -a)
+                shift
+                [[ $# -gt 0 ]] && usage
+                
+                #======================================
+                # Add a new project
+                #======================================
+                clear
+                echo "${HLINE}"
+                echo "Add new project"
+                echo "Enter a name, or Quit"
+                echo "${HLINE}"
+                read PNAME
+                if [[ "${PNAME}" == "Quit" ]]
+                then
+                    exit
+                else
+                    #======================================
+                    # Create the directory structure for 
+                    # the new project
+                    #======================================
+                    mkdir "${MU_TST}/${PNAME}" || die "Failed to create new test project directory (${MU_TST}/${PNAME})"
+                    mkdir "${MU_TST}/${PNAME}/bin" || die "Failed to create new test project directory (${MU_TST}/${PNAME}/bin)"
+                    mkdir "${MU_TST}/${PNAME}/env" || die "Failed to create new test project directory (${MU_TST}/${PNAME}/env)"
+                    mkdir "${MU_TST}/${PNAME}/resources" || die "Failed to create new test project directory (${MU_TST}/${PNAME}/resources)"
+                    cp .vimrc.custom "${MU_TST}/${PNAME}/bin/" || die "Copy failed for (.vimrc.custom) to ("${MU_TST}/${PNAME}/bin")"
+                    cp .vimrc.custom "${MU_TST}/${PNAME}/env/" || die "Copy failed for (.vimrc.custom) to ("${MU_TST}/${PNAME}/env")"
+                    cp .vimrc.custom "${MU_TST}/${PNAME}/resources/" || die "Copy failed for (.vimrc.custom) to ("${MU_TST}/${PNAME}/resources")"
+                    cp .licence "${MU_TST}/${PNAME}/bin/" || die "Copy failed for (.licence) to ("${MU_TST}/${PNAME}/bin")"
+                    cp .licence "${MU_TST}/${PNAME}/env/" || die "Copy failed for (.licence) to ("${MU_TST}/${PNAME}/env")"
+                    cp .licence "${MU_TST}/${PNAME}/resources/" || die "Copy failed for (.licence) to ("${MU_TST}/${PNAME}/resources")"
+                    [[ -f ./.dummy.env ]] && cp ./.dummy.env "${MU_TST}/${PNAME}/env/${PNAME}.env" || die "Failed to copy dummy env (./.dummy.env)to (${MU_TST}/${PNAME}/resources)"
+                    sed -i 's/_PROJECT_/'${PNAME}'/g' "${MU_TST}/${PNAME}/env/${PNAME}.env" || die "Failed to set PRJ name in env file (${MU_TST}/${PNAME}/env/${PNAME}.env)"
+                    [[ -f ./.dummy.tst ]] && cp ./.dummy.tst "${MU_TST}/${PNAME}/bin/mu_test_${PNAME}" || die "Failed to copy dummy test file (./.dummy.tst) to (${MU_TST}/${PNAME}/bin/mu_test_${PNAME})"
+                    sed -i '{
+                        s/_NAME_/mu_test_'${PNAME}'/g
+                        s/_USER_/'${USER}'/g
+                        s#_DATE_#'$(date +"%d/%m/%Y")'#g
+                    }' "${MU_TST}/${PNAME}/bin/mu_test_${PNAME}"
+
+                    #======================================
+                    # Report Success
+                    #======================================
+                    clear
+                    echo "${HLINE}"
+                    echo "New Project Structure Created"
+                    echo "${HLINE}"
+                    find ${MU_TST}/${PNAME} -not -name ".*"
+                    echo "${HLINE}"
+                fi
+                exit
+            ;;
             mu_*)
                 #======================================
                 # User wants to run specific test/s
                 #======================================
-                [[ ${1} == mu_* ]] || die "Usage. Test name must begin with mu_"
                 MU_TEST_NAMES="${MU_TEST_NAMES} ${1}"
                 shift
             ;;
-            -s)
+            -t)
                 shift
                 [[ $# -gt 0 ]] && usage
 
@@ -498,43 +399,6 @@ validate_cmd_line()
 }
 ##############################################################
 ##
-## Name         :   mu_log_line
-## Author       :   Bradley Atkins
-## Description  :   Write a line to the log
-## Date         :   02/08/2015
-## Args         :   1 - Line
-##                  2 - Error Level
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##############################################################
-mu_log_line()
-{
-    [[ "${1}" == "Failed to write to log" ]] && return
-
-    echo "$(date): ${2}: ${1}" >> "${MU_LOG}" || die "Failed to write to log"
-}
-##############################################################
-##
-## Name         :   mu_create_map_files
-## Author       :   Bradley Atkins
-## Description  :   Create the map files for MUSE and MUNIT
-## Date         :   02/08/2015
-## Args         :   
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##############################################################
-mu_create_map_files()
-{
-    local DIR
-    for DIR in ${MU_MAP_DIRS[@]}
-    do
-        find ${DIR} -type f >> "${MU_MUNIT_MAP}" 2>/dev/null || die "Find failed for (${DIR}) (munit)"
-    done
-}
-##############################################################
-##
 ## Name         :   mu_check_test_suite_format
 ## Author       :   Bradley Atkins
 ## Description  :   Basic sanity checks on file format
@@ -617,6 +481,7 @@ mu_create_test_files()
                 printf "%s\n" "export THIS_TEST_NAME=${TEST_NAME}" >> "${TEST_FILE}"
                 printf "%s\n" "export MU_TMP=${MU_TMP}" >> "${TEST_FILE}"
                 printf "%s\n" "export MU_RPT=${MU_RPT}" >> "${TEST_FILE}"
+                printf "%s\n" "export MU_TST=${MU_TST}" >> "${TEST_FILE}"
                 printf "%s\n" "export MU_ERROR_IDX=${MU_ERROR_IDX}" >> "${TEST_FILE}"
                 printf "%s\n" "export MU_TEST_BUF=${MU_TEST_BUF}" >> "${TEST_FILE}"
 
@@ -668,23 +533,5 @@ mu_create_test_files()
         echo "==========================================================="
     fi
 }
-##############################################################
-##
-## Name         :   mu_get_mid_line_offset
-## Author       :   Bradley Atkins
-## Description  :   Calculate the offset required to centre a 
-##                  string in the report header.
-## Date         :   08/08/2015
-## Args         :   1 - String length
-##                  2 - Var to return offset
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##############################################################
-mu_get_mid_line_offset()
-{
-    eval "${2}"=$(( $(( MU_HEAD_LINE_LEN - ${#1} )) / 2 ))   
-}
 
 
-set +a

@@ -77,9 +77,16 @@ die()
 #======================================
 # Bootstrap
 #======================================
+export MU_START_DIR=$(pwd)
 cd "$(dirname "$0")"
-source ./ctl/user.env
+source ctl/common_functions
 source ./ctl/bootstrap
+include user.env
+include reporting.funcs
+
+#======================================
+# Check for sensible env vars
+#======================================
 mu_validate_environment
 
 #======================================
@@ -136,16 +143,10 @@ mu_gen_line "=" "${MU_HEAD_LINE_LEN}" HEADLINE
 #======================================
 # Print the report header
 #======================================
-include reporting.funcs
 printf "%s\n" "${HEADLINE}" | tee -a "${MU_MASTER_RPT}"
-
-mu_get_mid_line_offset "( MUNIT ) Test Report" OFS
-printf "%-${OFS}s%s\n" "" "( MUNIT ) Test Report" | tee -a "${MU_MASTER_RPT}"
-mu_get_mid_line_offset "$(date)" OFS
-printf "%-${OFS}s%s\n" "" "$(date)" | tee -a "${MU_MASTER_RPT}"
-mu_get_mid_line_offset "Project - (${MU_CURRENT_PROJECT})" OFS
-printf "%-${OFS}s%s\n" "" "Project - (${MU_CURRENT_PROJECT})"
-
+mu_printm "( MUNIT ) Test Report"
+mu_printm "$(date)"
+mu_printm "Project - (${MU_CURRENT_PROJECT})"
 printf "%s\n" "${HEADLINE}" | tee -a "${MU_MASTER_RPT}"
 
 #======================================
@@ -267,14 +268,15 @@ then
     printf "%s\n" "${HEADLINE}" | tee -a "${MU_MASTER_RPT}"
 fi
 
+#======================================
+# Write the metrics line
+#======================================
 RESSTR="(${MU_NUM_TESTS}) Tests, (${MU_ASSERTIONS}) Assertions, (${MU_FAILURES}) Failures. (${MU_ERRORS}) Errors"
-mu_get_mid_line_offset "${RESSTR}" OFS
-printf "%-${OFS}s%s\n" "" "${RESSTR}" | tee -a "${MU_MASTER_RPT}"
+mu_printm "${RESSTR}"
 printf "%s\n" "${HEADLINE}" | tee -a "${MU_MASTER_RPT}"
 
 #======================================
 # Report completion and exit
 #======================================
 [[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Run complete for - (${MU_RUNID})" "INFO"
-
 
