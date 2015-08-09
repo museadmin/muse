@@ -182,6 +182,8 @@ m_set_plugin_environment()
     echo 'export PLUGIN_CTL="'${M_PLUGIN_CTL}'/'${2}'_$(basename '${1}').ctl"' >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
     echo 'export M_USR_TAG="'${M_USR_TAG}'"' >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
     echo 'export M_SYS_TAG="'${M_SYS_TAG}'"' >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+    echo 'export M_DEV_ROOT="'${M_DEV_ROOT}'"' >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
+    echo 'export M_ROOT="'${M_ROOT}'"' >> "${TMPFILE2}" || m_fail 2 "Error: Write failed (${FUNCNAME})"
 
     #======================================
     # Add in any runtime variables

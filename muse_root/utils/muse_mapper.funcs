@@ -25,35 +25,6 @@
 ## USA
 ##
 ##############################################################
-m_map_muse()
-{
-    [[ -n "${M_ROOT}" ]] || return 2
-    [[ -n "${M_MUSE_MAP}" ]] || return 3
-    local BUF=/tmp/m_map_muse_${RANDOM}
-
-    while [[ -f "${BUF}" ]]
-    do
-        BUF=/tmp/m_map_muse_${RANDOM}
-    done
-
-    #======================================
-    # Find our dev and repo files
-    #======================================
-    if [[ -n "${M_DEV_ROOT}" ]] 
-    then
-        [[ -d "${M_DEV_ROOT}" ]] || return 4
-        find "${M_DEV_ROOT}" -type f > "${BUF}" 
-    fi
-
-    find "${M_ROOT}" -type f >> "${BUF}" 
-
-    #======================================
-    # Move to the map file
-    #======================================
-    mv "${BUF}" "${M_MUSE_MAP}" || return 5
-    
-    rm -f "${BUF}" || return 6
-}
 ##############################################################
 ##
 ## Name         :   m_find_file
@@ -72,43 +43,25 @@ m_find_file()
     # Setup and validation
     #======================================
     [[ $# -eq 2 ]] || m_fail 3 "Error: Usage args. Count - 2 expected. (${FUNCNAME})" 
-    local VAR
+    local VAR=
 
-    find_file "${1}" VAR || m_fail 3 "Error: Failed to find (${1}). Exit code ($?) (${FUNCNAME})" 
+    if [[ -n "${M_DEV_ROOT}" ]]
+    then
+        VAR=$(find "${M_DEV_ROOT}" -type f -name "${1}" -print -quit 2>/dev/null)
+        if [[ -n "${VAR}" ]] 
+        then
+            eval ${2}=${VAR}
+            return 0
+        fi
+    fi
 
-    eval ${2}=${VAR}
-}
-##############################################################
-##
-## Name         :   find_file
-## Author       :   Bradley Atkins
-## Description  :   Search down map file to find a flat file. 
-## Date         :   20/07/2012
-## Args         :   1 - file name
-##                  2 - Variable name to return file path
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##
-##############################################################
-find_file()
-{
-    #======================================
-    # Setup and validation
-    #======================================
-    [[ $# -eq 2 ]] || return 1
-    [[ -n "${1}" ]] || return 2
-    [[ ${2} =~ ^[0-9A-Z_]* ]] || return 3
-    [[ -f "${M_MUSE_MAP}" ]] || return 4
-    local TO=5 FILE=
+    VAR=$(find "${M_ROOT}" -type f -name "${1}" -print -quit 2>/dev/null)
+    if [[ -n "${VAR}" ]] 
+    then
+        eval ${2}=${VAR}
+        return 0
+    fi
 
-    #======================================
-    # Get a lock on the map file
-    #======================================
-    FILE="$(awk -v f="${1}" '($NF == f){print $0;exit}' FS="/" "${M_MUSE_MAP}")"
-    
-    [[ -n "${FILE}" ]] || return 6
-    [[ -f "${FILE}" ]] || return 7
+    return 1
 
-    eval ${2}="${FILE}"
 }

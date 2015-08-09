@@ -183,23 +183,11 @@ log_local()
 include()
 {
     local F=
-    
-    if [[ -z "${M_MAPPER}" ]]
-    then
-        #======================================
-        # Map all of our files
-        #======================================
-        export M_MAPPER="${M_ROOT}/utils/muse_mapper.funcs"
-        source "${M_MAPPER}" || die_local "Failed to source muse_mapper"
-        m_map_muse || die_local "Call to m_map_muse failed ($?)"
-        :> "${M_INCLUDE_REGISTER}"
-
-    fi
 
     #======================================
     # Find the resource and source it
     #======================================
-    find_file ${1} F || die_local "Failed to find include file (${1})"
+    m_find_file ${1} F || die_local "Failed to find include file (${1})"
     if ! grep "${F}" "${M_INCLUDE_REGISTER}"
     then
         source "${F}" || die_local "Failed to source include file (${1})"
@@ -257,12 +245,18 @@ set -a
 
     M_MUSE_MAP="/var/tmp/muse/m_system/m_master_map"
     M_INCLUDE_REGISTER="/var/tmp/muse/m_system/.master_include_register"
+    M_MAPPER="${M_ROOT}/utils/muse_mapper.funcs"
 set +a
 
+[[ -n "${M_DEV_ROOT}" ]] && find "${M_DEV_ROOT}" -type f > "${M_MUSE_MAP}"
+find "${M_ROOT}" -type f >> "${M_MUSE_MAP}"
 
 #======================================
 # Include our libraries etc.
 #======================================
+:> "${M_INCLUDE_REGISTER}"
+source "${M_MAPPER}" || die_local "Failed to source muse_mapper"
+
 include cnxn.funcs
 include comm.funcs
 include common.funcs
@@ -284,7 +278,7 @@ include defaults.env
 # Find our error handler and then
 # Set up our runtime environment
 #======================================
-find_file m_exec_failure M_EXEC_FAILURE || die_local "Failed to find m_exec_failure"
+m_find_file m_exec_failure M_EXEC_FAILURE || die_local "Failed to find m_exec_failure"
 export M_EXEC_FAILURE=${M_EXEC_FAILURE}
 m_init 
 

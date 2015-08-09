@@ -16,7 +16,7 @@
 ##############################################################
 SCRIPT_NAME=m_hello_from_world_of_java
 
-m_find_file HelloFromjava.jar HELLO || m_fail 1 "Error: Call to m_find_file failed.  (${FUNCNAME})" 
+m_find_file HelloFromjava.jar HELLO || m_fail 1 "Error: Call to m_find_file failed.  (${SCRIPT_NAME})" 
 
 /usr/java/latest/bin/java -jar "${HELLO}" || m_fail 1 "Error: Call to HelloFromjava.jar failed (${SCRIPT_NAME})" 
 

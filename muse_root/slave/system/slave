@@ -117,19 +117,7 @@ include()
 {
     local F=
 
-    if [[ -z "${M_MAPPER}" ]]
-    then
-        #======================================
-        # Map all of our files
-        #======================================
-        export M_MAPPER="${M_ROOT}/utils/muse_mapper.funcs"
-        source "${M_MAPPER}" || die_local "Failed to source muse_mapper"
-        m_map_muse || die_local "Call to m_map_muse failed ($?)"
-        :> "${M_INCLUDE_REGISTER}"
-
-    fi
-
-    find_file ${1} F || die_local "Failed to find (${1})"
+    m_find_file ${1} F || die_local "Failed to find (${1})"
     if ! grep "${F}" "${M_INCLUDE_REGISTER}"
     then
         source "${F}" || die_local "Failed to source file (${1})"
@@ -209,10 +197,14 @@ set -a
     M_UTILS="${M_ROOT}/utils"
     M_MUSE_MAP="/var/tmp/muse/m_system/m_slave_map"
     M_INCLUDE_REGISTER="/var/tmp/.slave_include_register"
+    M_MAPPER="${M_ROOT}/utils/muse_mapper.funcs"
     M_SERVER_LIST=${M_MASTER_HOST}
 
     SM_RUNNING="FALSE"
 set +a
+
+[[ -n "${M_DEV_ROOT}" ]] && find "${M_DEV_ROOT}" -type f > "${M_MUSE_MAP}"
+find "${M_ROOT}" -type f >> "${M_MUSE_MAP}"
 
 [[ ${M_LOG_LEVEL} == "DEBUG" ]] && log_local "Security Validation Passed" "INFO"
 dump_env
@@ -223,6 +215,8 @@ dump_env
 # use them as we are sourcing them into
 # our shell, not running them in situ.
 #======================================
+source "${M_MAPPER}" || die_local "Failed to source muse_mapper"
+:> "${M_INCLUDE_REGISTER}"
 include env.dat
 include cnxn.funcs
 include comm.funcs
