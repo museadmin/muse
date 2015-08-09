@@ -34,13 +34,15 @@ def Test-m_get_file_data
     #======================================
     # Require our Files under Test
     #======================================
+    require_file muse_test_support.funcs
     require_file common.funcs
-    import common.funcs
     require_file funky_dirs.tar
     require_file m_get_file_data-1.exp
     require_file m_get_file_data-2.exp
     require_file m_get_file_data-3.exp
     require_file m_get_file_data-4.exp
+    import muse_test_support.funcs
+    import common.funcs
 
     #======================================
     # All available so assign to VARS
@@ -100,12 +102,14 @@ def Test-m_get_md5sum
     #======================================
     # Require our Files under Test
     #======================================
-    require_regular_file common.funcs
+    require_file muse_test_support.funcs
+    require_file common.funcs
+    require_file muse_mapper.funcs
+    require_file m_get_md5sum.txt
+    require_file m_get_md5sum.exp
     import common.funcs
-    require_regular_file muse_mapper.funcs
+    import muse_test_support.funcs
     import muse_mapper.funcs
-    require_regular_file m_get_md5sum.txt
-    require_regular_file m_get_md5sum.exp
 
     #======================================
     # Tweak the environment for MUSE find
@@ -120,4 +124,20 @@ def Test-m_get_md5sum
     
     assert_equal_string "${MD}" $(cat "${EXP}")
 
+end
+
+def Test-m_check_file
+    #======================================
+    # Requires
+    #======================================
+    require_file muse_test_support.funcs
+    require_file common.funcs
+    import muse_test_support.funcs
+    import common.funcs
+
+    #======================================
+    # Run the test
+    #======================================
+    mu_find_file m_check_file.exe CF
+    m_check_file -rwx "${CF}" || raise_failure "Non zero exit code from m_check_file"
 end

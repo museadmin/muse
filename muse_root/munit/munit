@@ -115,6 +115,8 @@ mkdir -p "${MU_TMP}"
 rm -rf "${MU_TMP}"/* || die "Cleardown of (${MU_TMP}) failed"
 [[ -d "${MU_RPT}" ]] || die "Failed to create MUNIT report directory (${MU_RPT}) (munit)"
 rm -rf "${MU_RPT}"/* || die "Cleardown of (${MU_RPT}) failed"
+[[ -d "${MU_EXP}" ]] || die "Failed to create MUNIT exp directory (${MU_EXP}) (munit)"
+rm -rf "${MU_EXP}"/* || die "Cleardown of (${MU_EXP}) failed"
 
 #======================================
 # Initialise the run environment
@@ -176,9 +178,10 @@ do
     # Run the test
     #======================================
     :>"${MU_STDERR_BUF}"
+    :>"${MU_STDOUT_BUF}"
     
     "${MU_TMP}/${THISTEST}" > "${MU_STDOUT_BUF}" 2> "${MU_STDERR_BUF}"
-    
+
     if [[ -s "${MU_STDERR_BUF}" ]]
     then
         #======================================
