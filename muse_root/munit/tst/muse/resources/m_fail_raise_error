@@ -1,9 +1,11 @@
 #! /bin/bash
 ##############################################################
 ##
-## Name         :   muse_test_support.funs
+## Name         :   m_fail_raise_error
 ## Author       :   Bradley Atkins
-## Description  :   Helper functions for muse test project
+## Description  :   Stub m_fail funtion for MUSE errors. Raises
+##                  a fail in MUNIT when MUSE function under test
+##                  throws an error
 ## Date         :   09/08/2015
 ## Args         :   
 ## Status       :   Reviewed    [n]

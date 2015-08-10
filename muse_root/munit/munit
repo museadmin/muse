@@ -112,11 +112,8 @@ mu_log_line "Starting test run - (${MU_RUNID})" "INFO"
 #======================================
 mkdir -p "${MU_TMP}"
 [[ -d "${MU_TMP}" ]] || die "Failed to create MUNIT TMP directory (${MU_TMP}) (munit)"
-rm -rf "${MU_TMP}"/* || die "Cleardown of (${MU_TMP}) failed"
 [[ -d "${MU_RPT}" ]] || die "Failed to create MUNIT report directory (${MU_RPT}) (munit)"
-rm -rf "${MU_RPT}"/* || die "Cleardown of (${MU_RPT}) failed"
 [[ -d "${MU_EXP}" ]] || die "Failed to create MUNIT exp directory (${MU_EXP}) (munit)"
-rm -rf "${MU_EXP}"/* || die "Cleardown of (${MU_EXP}) failed"
 
 #======================================
 # Initialise the run environment
@@ -128,6 +125,13 @@ mu_init
 #======================================
 validate_cmd_line "$@"
 [[ "${MU_LOG_LEVEL}" == "DEBUG" ]] && mu_log_line "Command line validated ($@)" "INFO"
+
+#======================================
+# Cleardown run data from last run
+#======================================
+rm -rf "${MU_TMP}"/* || die "Cleardown of (${MU_TMP}) failed"
+rm -rf "${MU_EXP}"/* || die "Cleardown of (${MU_EXP}) failed"
+rm -rf "${MU_RPT}"/* || die "Cleardown of (${MU_RPT}) failed"
 
 #======================================
 # Parse the test suites and break out
@@ -277,6 +281,28 @@ fi
 RESSTR="(${MU_NUM_TESTS}) Tests, (${MU_ASSERTIONS}) Assertions, (${MU_FAILURES}) Failures. (${MU_ERRORS}) Errors"
 mu_printm "${RESSTR}"
 printf "%s\n" "${HEADLINE}" | tee -a "${MU_MASTER_RPT}"
+
+#======================================
+# Has user select to tar up exp files?
+#======================================
+if "${MU_TAR_EXPECTED_FILES}"
+then
+    if ls "${MU_EXP}"/*.exp.* >/dev/null 2>&1
+    then
+        cd "${MU_EXP}"
+        tarball=expected_results_$(date +"%d%m%Y%H%M%S").tar
+        tar cvf "${tarball}" *.exp.* >/dev/null 2>&1 ||
+            die "Failed to tar expected results in (${MU_EXP})"
+        mv "${tarball}" "${MU_START_DIR}" || die "Move failed for archive (${tarball}) to (${MU_START_DIR})"
+        mu_printm "Archived expected result files "
+        mu_printm "(${tarball})" 
+        mu_printm "moved to (${MU_START_DIR})"
+    else
+        mu_printm "User selected -ge option to archive new expected results but:"
+        mu_printm "No expected results found in (${MU_EXP})" | tee -a "${MU_MASTER_RPT}"
+    fi
+    printf "%s\n" "${HEADLINE}" | tee -a "${MU_MASTER_RPT}"
+fi
 
 #======================================
 # Report completion and exit

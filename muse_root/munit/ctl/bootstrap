@@ -103,6 +103,7 @@ mu_validate_environment()
     [[ "${MU_MENU_LINE_LEN}" =~ ^[[:digit:]]+$ ]] || die "MU_MENU_LINE_LEN validation failed (${FUNCNAME})"
     [[ "${MU_HEAD_LINE_LEN}" =~ ^[[:digit:]]+$ ]] || die "MU_HEAD_LINE_LEN validation failed (${FUNCNAME})"
 
+    M_FAIL="${MU_TMP}/m_fail"
     MU_ERRORS=0
     MU_FAILURES=0
     MU_TESTS=0
@@ -110,6 +111,9 @@ mu_validate_environment()
     MU_CMD_LINE=""
     MU_TEST_NAMES=""
     MU_CURRENT_PROJECT=""
+    MU_TAR_EXPECTED_FILES=false
+    MU_CLEARDOWN_LAST_RUN=true
+
     TMPFIL1=""
     TMPFILE2=""
     TMPFILE3=""
@@ -171,7 +175,9 @@ usage()
     printf "\n"
     printf "\t%s\n" "${0##*/} <test name/s>  : Run test suite/s"
     printf "\t%s\n" "${0##*/} -a <name>      : Create a new project structure"
+    printf "\t%s\n" "${0##*/} -ge            : Collect all new expected results files"
     printf "\t%s\n" "${0##*/} -t             : Select project and test/s"
+    printf "\t%s\n" "${0##*/} -x             : Run tests in debug mode"
     printf "\n%s\n" "${HEADLINE}"
     exit
 }
@@ -198,204 +204,6 @@ include()
 
     [[ -r "${FILE}" ]] || die "Include library (${FILE}) not a readable file (${FUNCNAME})"
     source "${FILE}" || die "Include failed for library (${FILE}) (${FUNCNAME})"
-}
-##############################################################
-##
-## Name         :   validate_cmd_line
-## Author       :   Bradley Atkins
-## Description  :   Check the cmd line is valid
-## Date         :   02/08/2015
-## Args         :   1 - Entire command line
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##############################################################
-validate_cmd_line()
-{
-    [[ $# -eq 0 ]] && usage
-
-    #======================================
-    # Validate
-    #======================================
-    local FILE= OPT= PRJS= HLINE= ENV= PNAME=
-    mu_gen_line "=" "${MU_MENU_LINE_LEN}" HLINE
-
-    while [[ $# -gt 0 ]]
-    do
-        case ${1} in
-            -a)
-                shift
-                [[ $# -gt 0 ]] && usage
-                
-                #======================================
-                # Add a new project
-                #======================================
-                clear
-                echo "${HLINE}"
-                echo "Add new project"
-                echo "Enter a name, or Quit"
-                echo "${HLINE}"
-                read PNAME
-                if [[ "${PNAME}" == "Quit" ]]
-                then
-                    exit
-                else
-                    #======================================
-                    # Create the directory structure for 
-                    # the new project
-                    #======================================
-                    mkdir "${MU_TST}/${PNAME}" || die "Failed to create new test project directory (${MU_TST}/${PNAME})"
-                    mkdir "${MU_TST}/${PNAME}/bin" || die "Failed to create new test project directory (${MU_TST}/${PNAME}/bin)"
-                    mkdir "${MU_TST}/${PNAME}/env" || die "Failed to create new test project directory (${MU_TST}/${PNAME}/env)"
-                    mkdir "${MU_TST}/${PNAME}/resources" || die "Failed to create new test project directory (${MU_TST}/${PNAME}/resources)"
-                    cp .vimrc.custom "${MU_TST}/${PNAME}/bin/" || die "Copy failed for (.vimrc.custom) to ("${MU_TST}/${PNAME}/bin")"
-                    cp .vimrc.custom "${MU_TST}/${PNAME}/env/" || die "Copy failed for (.vimrc.custom) to ("${MU_TST}/${PNAME}/env")"
-                    cp .vimrc.custom "${MU_TST}/${PNAME}/resources/" || die "Copy failed for (.vimrc.custom) to ("${MU_TST}/${PNAME}/resources")"
-                    cp .licence "${MU_TST}/${PNAME}/bin/" || die "Copy failed for (.licence) to ("${MU_TST}/${PNAME}/bin")"
-                    cp .licence "${MU_TST}/${PNAME}/env/" || die "Copy failed for (.licence) to ("${MU_TST}/${PNAME}/env")"
-                    cp .licence "${MU_TST}/${PNAME}/resources/" || die "Copy failed for (.licence) to ("${MU_TST}/${PNAME}/resources")"
-                    [[ -f ./.dummy.env ]] && cp ./.dummy.env "${MU_TST}/${PNAME}/env/${PNAME}.env" || die "Failed to copy dummy env (./.dummy.env)to (${MU_TST}/${PNAME}/resources)"
-                    sed -i 's/_PROJECT_/'${PNAME}'/g' "${MU_TST}/${PNAME}/env/${PNAME}.env" || die "Failed to set PRJ name in env file (${MU_TST}/${PNAME}/env/${PNAME}.env)"
-                    [[ -f ./.dummy.tst ]] && cp ./.dummy.tst "${MU_TST}/${PNAME}/bin/mu_test_${PNAME}" || die "Failed to copy dummy test file (./.dummy.tst) to (${MU_TST}/${PNAME}/bin/mu_test_${PNAME})"
-                    sed -i '{
-                        s/_NAME_/mu_test_'${PNAME}'/g
-                        s/_USER_/'${USER}'/g
-                        s#_DATE_#'$(date +"%d/%m/%Y")'#g
-                    }' "${MU_TST}/${PNAME}/bin/mu_test_${PNAME}"
-
-                    #======================================
-                    # Report Success
-                    #======================================
-                    clear
-                    echo "${HLINE}"
-                    echo "New Project Structure Created"
-                    echo "${HLINE}"
-                    find ${MU_TST}/${PNAME} -not -name ".*"
-                    echo "${HLINE}"
-                fi
-                exit
-            ;;
-            mu_*)
-                #======================================
-                # User wants to run specific test/s
-                #======================================
-                MU_TEST_NAMES="${MU_TEST_NAMES} ${1}"
-                shift
-            ;;
-            -t)
-                shift
-                [[ $# -gt 0 ]] && usage
-
-                ## Force a single column menu
-                export COLUMNS=1
-
-                #======================================
-                # List all projects in a menu format.
-                # Set current project from selection.
-                #======================================
-                if [[ -n $(ls -d tst/* 2>/dev/null | awk '{print $NF}' FS='/') ]]
-                then
-                    clear
-                    echo "${HLINE}"
-                    echo "Choose a project"
-                    echo "${HLINE}"
-
-                    PS3='Set working project: '
-                    OPTIONS=($(ls -d tst/* 2>/dev/null | awk '{print $NF}' FS='/') "Quit")
-                    select OPT in "${OPTIONS[@]}"
-                    do
-                        ## Choice out of range
-                        [[ "${REPLY}" -gt "${#OPTIONS[@]}" ]] && continue
-                        
-                        case "${OPT}" in
-                            "Quit")
-                                exit
-                                ;;
-                            *)
-                                
-                                #======================================
-                                # Need another menu of tests within 
-                                # the project
-                                #======================================
-                                MU_CURRENT_PROJECT="${OPT}"
-                                clear
-                                TESTS="$(ls -f tst/"${MU_CURRENT_PROJECT}"/bin/mu_test* 2>/dev/null | awk '{print $NF}' FS='/')"
-                                if [[ -n "${TESTS}" ]] 
-                                then
-                                    echo "${HLINE}"
-                                    echo "Choose a test"
-                                    echo "${HLINE}"
-                                    
-                                    PS3='Select test to run: '
-                                    OPTIONS=("All" ${TESTS} "Quit")
-                                    
-                                    select OPT in "${OPTIONS[@]}"
-                                    do
-                                        ## Choice out of range
-                                        [[ "${REPLY}" -gt "${#OPTIONS[@]}" ]] && continue
-                                        
-                                        case "${OPT}" in 
-                                            "All") 
-                                                #======================================
-                                                # User wants to run all tests
-                                                #======================================
-                                                for FILE in ${TESTS}
-                                                do
-                                                    MU_TEST_NAMES="${MU_TEST_NAMES} $(basename ${FILE})"
-                                                done
-                                                break
-                                            ;;
-                                            "Quit")
-                                                exit
-                                            ;;
-                                            *)
-                                                MU_TEST_NAMES="${OPT}"
-                                                break
-                                            ;;
-                                        esac
-                                    done
-                                    clear
-                                    break
-                                else
-                                    echo "${HLINE}"
-                                    echo "No test files found in project (${MU_CURRENT_PROJECT})"
-                                    echo "${HLINE}"
-                                    exit
-                                fi
-                                ;;
-                        esac
-                    done
-                    else
-                    echo "${HLINE}"
-                    echo "No projects found in test directory"
-                    echo "${HLINE}"
-                    exit
-                fi
-            ;;
-        esac
-    done
-
-    #======================================
-    # See if the project has an env file
-    #======================================
-    ENV=$(find "${MU_TST}/${MU_CURRENT_PROJECT}/env" -name "${MU_CURRENT_PROJECT}.env" 2>/dev/null)
-    if [[ -n "${ENV}" ]]
-    then
-        if [[ -r "${ENV}" ]]
-        then
-            source "${ENV}" || die "Source failed for project env file (${ENV})"
-        else
-            die "Project env file (${ENV}) not readable"
-        fi
-    fi
-
-    #======================================
-    # Confirm all test names can be found
-    #======================================
-    for FILE in ${MU_TEST_NAMES}
-    do
-        mu_find_file "${FILE}" FILE
-    done
 }
 ##############################################################
 ##
@@ -532,6 +340,276 @@ mu_create_test_files()
         diff <(sort "${TMPFILE2}") <(sort -u "${TMPFILE2}") | sed 's/< //g' | egrep mu_
         echo "==========================================================="
     fi
+}
+##############################################################
+##
+## Name         :   validate_cmd_line
+## Author       :   Bradley Atkins
+## Description  :   Check the cmd line is valid
+## Date         :   02/08/2015
+## Args         :   1 - Entire command line
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+validate_cmd_line()
+{
+    [[ $# -eq 0 ]] && usage
+
+    #======================================
+    # Validate
+    #======================================
+    local FILE= OPT= PRJS= HLINE= ENV= PNAME= THIS_ASSERTION= LINE= FNAME= ANAME=
+    mu_gen_line "=" "${MU_MENU_LINE_LEN}" HLINE
+
+    while [[ $# -gt 0 ]]
+    do
+        case ${1} in
+            -a)
+                shift
+                [[ $# -gt 0 ]] && usage
+                
+                #======================================
+                # Add a new project
+                #======================================
+                clear
+                echo "${HLINE}"
+                echo "Add new project"
+                echo "Enter a name, or Quit"
+                echo "${HLINE}"
+                read PNAME
+                if [[ "${PNAME}" == "Quit" ]]
+                then
+                    exit
+                else
+                    #======================================
+                    # Create the directory structure for 
+                    # the new project
+                    #======================================
+                    mkdir "${MU_TST}/${PNAME}" || die "Failed to create new test project directory (${MU_TST}/${PNAME})"
+                    mkdir "${MU_TST}/${PNAME}/bin" || die "Failed to create new test project directory (${MU_TST}/${PNAME}/bin)"
+                    mkdir "${MU_TST}/${PNAME}/env" || die "Failed to create new test project directory (${MU_TST}/${PNAME}/env)"
+                    mkdir "${MU_TST}/${PNAME}/resources" || die "Failed to create new test project directory (${MU_TST}/${PNAME}/resources)"
+                    cp .vimrc.custom "${MU_TST}/${PNAME}/bin/" || die "Copy failed for (.vimrc.custom) to ("${MU_TST}/${PNAME}/bin")"
+                    cp .vimrc.custom "${MU_TST}/${PNAME}/env/" || die "Copy failed for (.vimrc.custom) to ("${MU_TST}/${PNAME}/env")"
+                    cp .vimrc.custom "${MU_TST}/${PNAME}/resources/" || die "Copy failed for (.vimrc.custom) to ("${MU_TST}/${PNAME}/resources")"
+                    cp .licence "${MU_TST}/${PNAME}/bin/" || die "Copy failed for (.licence) to ("${MU_TST}/${PNAME}/bin")"
+                    cp .licence "${MU_TST}/${PNAME}/env/" || die "Copy failed for (.licence) to ("${MU_TST}/${PNAME}/env")"
+                    cp .licence "${MU_TST}/${PNAME}/resources/" || die "Copy failed for (.licence) to ("${MU_TST}/${PNAME}/resources")"
+                    [[ -f ./.dummy.env ]] && cp ./.dummy.env "${MU_TST}/${PNAME}/env/${PNAME}.env" || 
+                        die "Failed to copy dummy env (./.dummy.env)to (${MU_TST}/${PNAME}/resources)"
+                    sed -i 's/_PROJECT_/'${PNAME}'/g' "${MU_TST}/${PNAME}/env/${PNAME}.env" || 
+                        die "Failed to set PRJ name in env file (${MU_TST}/${PNAME}/env/${PNAME}.env)"
+                    [[ -f ./.dummy.tst ]] && cp ./.dummy.tst "${MU_TST}/${PNAME}/bin/mu_test_${PNAME}" || 
+                        die "Failed to copy dummy test file (./.dummy.tst) to (${MU_TST}/${PNAME}/bin/mu_test_${PNAME})"
+                    #======================================
+                    # Change the header metadata
+                    #======================================
+                    sed -i '{
+                        s/_NAME_/mu_test_'${PNAME}'/g
+                        s/_USER_/'${USER}'/g
+                        s#_DATE_#'$(date +"%d/%m/%Y")'#g
+                    }' "${MU_TST}/${PNAME}/bin/mu_test_${PNAME}"
+
+                    #======================================
+                    # Report Success
+                    #======================================
+                    clear
+                    echo "${HLINE}"
+                    echo "New Project Structure Created"
+                    echo "${HLINE}"
+                    find ${MU_TST}/${PNAME} -not -name ".*"
+                    echo "${HLINE}"
+                fi
+                exit
+            ;;
+            -ge)
+                #======================================
+                # Gather all expected results files from 
+                # last run.
+                #======================================
+                shift 
+                [[ $# -eq 0 ]] && usage
+                MU_TAR_EXPECTED_FILES=true
+            ;;
+            -la)
+                #======================================
+                # List all assertions in sorted order
+                #======================================
+                clear
+                echo "${HLINE}"
+                echo "Choose an Assertion"
+                echo "${HLINE}"
+
+                PS3='Select to view definition: '
+                OPTIONS=($(sed 's/()//g' < <(sort < <(for f in $(ls "${MU_LIB}"); do egrep ^assert_ "${MU_LIB}/$f"; done) | tr "\n" " ")) "Quit")
+                select OPT in "${OPTIONS[@]}"
+                do
+                    ## Choice out of range
+                    [[ "${REPLY}" -gt "${#OPTIONS[@]}" ]] && continue
+
+                    case "${OPT}" in
+                        "Quit")
+                            exit
+                            ;;
+                        *)
+                            #======================================
+                            # User wants to see Assertion def
+                            #======================================
+                            THIS_ASSERTION="${OPT}"
+
+                            #======================================
+                            # First find the file with this assert
+                            #======================================
+                            while read LINE
+                            do
+                                FNAME=$(echo "${LINE}" | cut -d":" -f1)
+                                ANAME=$(echo "${LINE}" | cut -d":" -f2 | sed 's/()//g')
+                                [[ "${ANAME}" == "${THIS_ASSERTION}" ]] && break
+                            done < <(egrep ^assert_ "${MU_LIB}/"* 2>/dev/null)
+                            [[ -n "${FNAME}" ]] || die "Failed to recover assertion file name"
+
+                            clear
+
+                            awk -v p=${ANAME} -v f=1 '
+                                ((f == 1) && (NR == FNR) && ($0 ~ /^## Name/) && ($NF == p)) {fs = (NR -2)}
+                                    ((f == 1) && (NR == FNR) && (fs != 0) && ($0 ~ /^}/)){fe = NR;f = 2}
+                                        ((NR != FNR) && (FNR >= fs) && (FNR <= fe)){print}
+                                            ' "${FNAME}" "${FNAME}"
+                            break
+                        ;;
+                    esac
+
+                done
+                exit
+            ;;
+            mu_*)
+                #======================================
+                # User wants to run specific test/s
+                #======================================
+                MU_TEST_NAMES="${MU_TEST_NAMES} ${1}"
+                shift
+            ;;
+            -t)
+                #======================================
+                # List all projects in a menu format.
+                #======================================
+                shift
+                [[ $# -gt 0 ]] && usage
+
+                ## Force a single column menu
+                export COLUMNS=1
+
+                if [[ -n $(ls -d tst/* 2>/dev/null | awk '{print $NF}' FS='/') ]]
+                then
+                    clear
+                    echo "${HLINE}"
+                    echo "Choose a project"
+                    echo "${HLINE}"
+
+                    PS3='Set working project: '
+                    OPTIONS=($(ls -d tst/* 2>/dev/null | awk '{print $NF}' FS='/') "Quit")
+                    select OPT in "${OPTIONS[@]}"
+                    do
+                        ## Choice out of range
+                        [[ "${REPLY}" -gt "${#OPTIONS[@]}" ]] && continue
+                        
+                        case "${OPT}" in
+                            "Quit")
+                                exit
+                                ;;
+                            *)
+                                
+                                #======================================
+                                # Need another menu of tests files 
+                                # within the project
+                                #======================================
+                                MU_CURRENT_PROJECT="${OPT}"
+                                clear
+                                TESTS="$(ls -f tst/"${MU_CURRENT_PROJECT}"/bin/mu_test* 2>/dev/null | awk '{print $NF}' FS='/')"
+                                if [[ -n "${TESTS}" ]] 
+                                then
+                                    echo "${HLINE}"
+                                    echo "Choose a test"
+                                    echo "${HLINE}"
+                                    
+                                    PS3='Select test to run: '
+                                    OPTIONS=("All" ${TESTS} "Quit")
+                                    
+                                    select OPT in "${OPTIONS[@]}"
+                                    do
+                                        ## Choice out of range
+                                        [[ "${REPLY}" -gt "${#OPTIONS[@]}" ]] && continue
+                                        
+                                        case "${OPT}" in 
+                                            "All") 
+                                                #======================================
+                                                # User wants to run all tests
+                                                #======================================
+                                                for FILE in ${TESTS}
+                                                do
+                                                    MU_TEST_NAMES="${MU_TEST_NAMES} $(basename ${FILE})"
+                                                done
+                                                break
+                                            ;;
+                                            "Quit")
+                                                exit
+                                            ;;
+                                            *)
+                                                MU_TEST_NAMES="${OPT}"
+                                                break
+                                            ;;
+                                        esac
+                                    done
+                                    clear
+                                    break
+                                else
+                                    echo "${HLINE}"
+                                    echo "No test files found in project (${MU_CURRENT_PROJECT})"
+                                    echo "${HLINE}"
+                                    exit
+                                fi
+                                ;;
+                        esac
+                    done
+                    else
+                    echo "${HLINE}"
+                    echo "No projects found in test directory"
+                    echo "${HLINE}"
+                    exit
+                fi
+            ;;
+            -x)
+                #======================================
+                # Turn on debug for this run
+                #======================================
+                MU_DEBUG_TEST="TRUE"
+                shift
+            ;;
+        esac
+    done
+
+    #======================================
+    # See if the project has an env file
+    #======================================
+    ENV=$(find "${MU_TST}/${MU_CURRENT_PROJECT}/env" -name "${MU_CURRENT_PROJECT}.env" 2>/dev/null)
+    if [[ -n "${ENV}" ]]
+    then
+        if [[ -r "${ENV}" ]]
+        then
+            source "${ENV}" || die "Source failed for project env file (${ENV})"
+        else
+            die "Project env file (${ENV}) not readable"
+        fi
+    fi
+
+    #======================================
+    # Confirm all test names can be found
+    #======================================
+    for FILE in ${MU_TEST_NAMES}
+    do
+        mu_find_file "${FILE}" FILE
+    done
 }
 
 

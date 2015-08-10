@@ -34,14 +34,14 @@ def Test-m_get_file_data
     #======================================
     # Require our Files under Test
     #======================================
-    require_file muse_test_support.funcs
+    require_file m_fail_raise_error
     require_file common.funcs
     require_file funky_dirs.tar
     require_file m_get_file_data-1.exp
     require_file m_get_file_data-2.exp
     require_file m_get_file_data-3.exp
     require_file m_get_file_data-4.exp
-    import muse_test_support.funcs
+    import m_fail_raise_error
     import common.funcs
 
     #======================================
@@ -102,13 +102,13 @@ def Test-m_get_md5sum
     #======================================
     # Require our Files under Test
     #======================================
-    require_file muse_test_support.funcs
+    require_file m_fail_raise_error
     require_file common.funcs
     require_file muse_mapper.funcs
     require_file m_get_md5sum.txt
     require_file m_get_md5sum.exp
     import common.funcs
-    import muse_test_support.funcs
+    import m_fail_raise_error
     import muse_mapper.funcs
 
     #======================================
@@ -130,9 +130,9 @@ def Test-m_check_file
     #======================================
     # Requires
     #======================================
-    require_file muse_test_support.funcs
+    require_file m_fail_raise_error
     require_file common.funcs
-    import muse_test_support.funcs
+    import m_fail_raise_error
     import common.funcs
 
     #======================================

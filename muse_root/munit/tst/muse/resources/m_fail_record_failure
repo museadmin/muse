@@ -1,0 +1,38 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   m_fail_record_failure
+## Author       :   Bradley Atkins
+## Description  :   Stub for MUSE m_fail function. Writes error
+##                  msg and level to file for later comaprison with 
+##                  an exp file. Used for testing failure paths in 
+##                  MUSE function libraries.
+## Date         :   09/08/2015
+## Args         :   1 - File to write failure data to
+##                  2 - Fail level (integer)
+##                  3 - Fail msg
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## This program is free software; you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, version 2 only.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program; if not, write to the Free Software
+## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
+## USA
+##
+##############################################################
+m_fail()
+{
+    [[ "${1}" =~ ^[[:digit:]]+$ ]] || raise_error "Usage. Arg[1]. Integer expected"
+    [[ -n "${2}" ]] || raise_error "Usage. Arg[2]. String expected"
+    echo "Call to m_fail with code (${1}) and msg (${2})" >> "${M_FAIL}"
+}
