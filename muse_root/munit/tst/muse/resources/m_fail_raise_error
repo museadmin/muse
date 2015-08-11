@@ -30,4 +30,5 @@
 m_fail()
 {
     raise_failure "Call to m_fail with msg (${2}) and error code (${1})"
+    return 1
 }

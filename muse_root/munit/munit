@@ -134,6 +134,11 @@ rm -rf "${MU_EXP}"/* || die "Cleardown of (${MU_EXP}) failed"
 rm -rf "${MU_RPT}"/* || die "Cleardown of (${MU_RPT}) failed"
 
 #======================================
+# Initialise the persistent error count
+#======================================
+echo "0" > "${MU_ERROR_IDX}"
+
+#======================================
 # Parse the test suites and break out
 # each test into its own exe
 #======================================

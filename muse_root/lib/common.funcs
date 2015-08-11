@@ -166,9 +166,9 @@ m_get_usr_tag()
     local TMP=$(cat "${M_USR_TAG_FILE}")
     [[ -n "${TMP}" ]] || return 1
 
-    mkdir "/tmp/${TMP}" 2>/dev/null || m_fail 1 "Error: Invalid tag name set (${TMP}) (${FUNCNAME})" 
-    [[ -d "/tmp/${TMP}" ]] || m_fail 1 "Error: failed to catch mkdir failure (${FUNCNAME})" 
-    rm -rf "/tmp/${TMP}" || m_fail 1 "Error: Failed to delete tmp tag directory (${FUNCNAME})" 
+    mkdir "/tmp/${TMP}" 2>/dev/null || m_fail 2 "Error: Invalid tag name set (${TMP}) (${FUNCNAME})" 
+    [[ -d "/tmp/${TMP}" ]] || m_fail 2 "Error: failed to catch mkdir failure (${FUNCNAME})" 
+    rm -rf "/tmp/${TMP}" || m_fail 2 "Error: Failed to delete tmp tag directory (${FUNCNAME})" 
 
     #======================================
     # Must be valid if we got this far so

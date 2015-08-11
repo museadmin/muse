@@ -1,3 +1,4 @@
+#! /bin/bash
 ##############################################################
 ##
 ## Name         :   mu_test_muse_common_funcs
@@ -125,13 +126,18 @@ def Test-m_get_md5sum
     assert_equal_string "${MD}" $(cat "${EXP}")
 
 end
-
+#======================================
+# Test for m_check_file
+#======================================
 def Test-m_check_file
     #======================================
     # Requires
     #======================================
     require_file m_fail_raise_error
+    require_file m_fail_record_failure
+    require_file m_get_usr_tag.exp
     require_file common.funcs
+
     import m_fail_raise_error
     import common.funcs
 
@@ -140,4 +146,70 @@ def Test-m_check_file
     #======================================
     mu_find_file m_check_file.exe CF
     m_check_file -rwx "${CF}" || raise_failure "Non zero exit code from m_check_file"
+
+    #======================================
+    # Test error pathways
+    #======================================
+    ## Overwrite m_fail_raise_error
+    #import m_fail_record_failure
+    #mu_get_exp_file m_check_file FAIL
+    #export M_FAIL="${FAIL}"
+    
+    #m_check_file "i"
+    #m_check_file "-f" "" 
+    #m_check_file "-q" "/var/log/messages" 
+
+end
+#======================================
+# Test for m_get_usr_tag
+#======================================
+def Test-m_get_usr_tag
+    #======================================
+    # Requires
+    #======================================
+    require_file common.funcs
+    require_file m_fail_record_failure
+    require_file m_get_usr_tag.exp
+
+    #======================================
+    # Stub a tag file and rejig the env
+    #======================================
+    mu_get_tmp_file m_get_usr_tag TFILE
+    mu_get_exp_file m_get_usr_tag FAIL
+    mu_find_file m_get_usr_tag.exp EXP
+    echo "m_get_usr_tag" > "${TFILE}"
+    export M_USR_TAG_FILE="${TFILE}"
+    export M_USER_TAG=""
+    export M_FAIL="${FAIL}"
+
+    #======================================
+    # Import the test lib and rigged m_fail
+    #======================================
+    import common.funcs
+    import m_fail_record_failure
+    
+    #======================================
+    # Positive test to return tag in exported
+    # M_USER_TAG var
+    #======================================
+    m_get_usr_tag 
+    assert_equal_string "m_get_usr_tag" "${M_USR_TAG}"
+
+    #======================================
+    # Negative tests to for failure paths
+    #======================================
+    ## nkdir failures
+    echo "blocking" > /tmp/m_get_usr_tag
+    m_get_usr_tag
+    ## Fail because multiline tag
+    echo "secondline" >> "${TFILE}"
+    m_get_usr_tag
+    ## Empty tag file failure
+    :>"${TFILE}"
+    m_get_usr_tag && raise_failure "m_get_usr_tag failed to trap empty tag file"
+    #======================================
+    # All msgs from m_fail should be in FAIL
+    #======================================
+    assert_is_not_different "${EXP}" "${FAIL}"
+
 end

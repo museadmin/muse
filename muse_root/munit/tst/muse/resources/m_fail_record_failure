@@ -35,4 +35,5 @@ m_fail()
     [[ "${1}" =~ ^[[:digit:]]+$ ]] || raise_error "Usage. Arg[1]. Integer expected"
     [[ -n "${2}" ]] || raise_error "Usage. Arg[2]. String expected"
     echo "Call to m_fail with code (${1}) and msg (${2})" >> "${M_FAIL}"
+    return 1
 }

@@ -124,6 +124,7 @@ mu_validate_environment()
     MU_TEST_LINE_PRINTED=false
     MU_FAILURE_LINE_PRINTED=false
     MU_ERROR_LINE_PRINTED=false
+    read MU_TERM_HEIGHT MU_TERM_WIDTH < <(stty size)
 }
 ##############################################################
 ##

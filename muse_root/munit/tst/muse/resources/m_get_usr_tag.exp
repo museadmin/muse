@@ -1,0 +1,3 @@
+Call to m_fail with code (2) and msg (Error: Invalid tag name set (m_get_usr_tag) (m_get_usr_tag))
+Call to m_fail with code (2) and msg (Error: failed to catch mkdir failure (m_get_usr_tag))
+Call to m_fail with code (2) and msg (Error: Multi Line tag set (m_get_usr_tag))
