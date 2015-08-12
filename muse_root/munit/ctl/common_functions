@@ -214,6 +214,16 @@ mu_find_file()
     fi
 
     #======================================
+    # Second search the run directories
+    #======================================
+    FPATH=$(find "${MU_ROOT}" -name "${1}" 2>/dev/null)
+    if [[ -n "${FPATH}" ]]
+    then
+        eval "${2}"="${FPATH}"
+        return
+    fi
+
+    #======================================
     # Now traverse any directories for proj
     #======================================
     for dir in ${MU_MAP_DIRS[@]}

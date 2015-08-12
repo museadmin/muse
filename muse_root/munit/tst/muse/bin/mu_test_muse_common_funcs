@@ -177,15 +177,19 @@ def Test-m_get_usr_tag
     mu_get_tmp_file m_get_usr_tag TFILE
     mu_get_exp_file m_get_usr_tag FAIL
     mu_find_file m_get_usr_tag.exp EXP
+    mu_find_file common.funcs FUT
     echo "m_get_usr_tag" > "${TFILE}"
     export M_USR_TAG_FILE="${TFILE}"
     export M_USER_TAG=""
     export M_FAIL="${FAIL}"
+    [[ -d /tmp/m_get_usr_tag ]] || rm -rf /tmp/m_get_usr_tag
 
     #======================================
     # Import the test lib and rigged m_fail
     #======================================
-    import common.funcs
+    ## Ensure we return a fail code from test m_fail
+    sed 's/\\(m_fail .*\\)/\\1 || return 1/g' "${FUT}" > "${MU_TMP}/common.funcs"
+    import "common.funcs"
     import m_fail_record_failure
     
     #======================================
@@ -198,12 +202,12 @@ def Test-m_get_usr_tag
     #======================================
     # Negative tests to for failure paths
     #======================================
-    ## nkdir failures
+    ## mkdir failures
     echo "blocking" > /tmp/m_get_usr_tag
-    m_get_usr_tag
+    m_get_usr_tag && raise_failure "Failed to detect block on mkdir"
     ## Fail because multiline tag
     echo "secondline" >> "${TFILE}"
-    m_get_usr_tag
+    m_get_usr_tag && raise_failure "Failed to detect multiline tag file"
     ## Empty tag file failure
     :>"${TFILE}"
     m_get_usr_tag && raise_failure "m_get_usr_tag failed to trap empty tag file"

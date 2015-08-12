@@ -110,7 +110,9 @@ m_get_file_data()
                     m_fail 1 "Error: Max depth param (${FUNCNAME})"
                 MAX_D="-maxdepth ${1}"
                 ;;
-            *) m_fail 1 "Error: Unrecognised option (${1}) (${FUNCNAME})";;
+            *) 
+                m_fail 1 "Error: Unrecognised option (${1}) (${FUNCNAME})"
+                ;;
         esac
         shift
     done
@@ -166,8 +168,7 @@ m_get_usr_tag()
     local TMP=$(cat "${M_USR_TAG_FILE}")
     [[ -n "${TMP}" ]] || return 1
 
-    mkdir "/tmp/${TMP}" 2>/dev/null || m_fail 2 "Error: Invalid tag name set (${TMP}) (${FUNCNAME})" 
-    [[ -d "/tmp/${TMP}" ]] || m_fail 2 "Error: failed to catch mkdir failure (${FUNCNAME})" 
+    mkdir "/tmp/${TMP}" 2>/dev/null || m_fail 2 "Error: Failed to create dir (/tmp/${TMP}) (${FUNCNAME})" 
     rm -rf "/tmp/${TMP}" || m_fail 2 "Error: Failed to delete tmp tag directory (${FUNCNAME})" 
 
     #======================================
@@ -483,7 +484,9 @@ m_update_file()
             
             mv "${TMPFILE}" "${1}" || m_fail 2 "Error: (Move failed ${FUNCNAME})" 
         ;;
-        *) m_fail 2 "Error: Unrecognised search type (${FUNCNAME})";;
+        *) 
+            m_fail 2 "Error: Unrecognised search type (${FUNCNAME})"
+        ;;
     esac
 
 }
