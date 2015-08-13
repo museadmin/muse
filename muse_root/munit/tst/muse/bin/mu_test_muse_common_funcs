@@ -95,6 +95,7 @@ def Test-m_get_file_data
     cd - >/dev/null 2>&1
 
 end
+
 #======================================
 # Test for m_get_md5sum
 #======================================
@@ -126,6 +127,7 @@ def Test-m_get_md5sum
     assert_equal_string "${MD}" $(cat "${EXP}")
 
 end
+
 #======================================
 # Test for m_check_file
 #======================================
@@ -144,22 +146,37 @@ def Test-m_check_file
     #======================================
     # Run the test
     #======================================
+    mu_find_file m_check_file.exp EXP
     mu_find_file m_check_file.exe CF
     m_check_file -rwx "${CF}" || raise_failure "Non zero exit code from m_check_file"
 
     #======================================
-    # Test error pathways
+    # Test error pathways - setup
     #======================================
-    ## Overwrite m_fail_raise_error
-    #import m_fail_record_failure
-    #mu_get_exp_file m_check_file FAIL
-    #export M_FAIL="${FAIL}"
+    mu_get_exp_file m_check_file FAIL
+    export M_FAIL="${FAIL}"
+
+    mu_find_file common.funcs FUT
+    sed 's/\(m_fail .*\)/\1 || return 1/g' "${FUT}" > "${MU_TMP}/common.funcs"
+    import "common.funcs"
+    import m_fail_record_failure
     
-    #m_check_file "i"
-    #m_check_file "-f" "" 
-    #m_check_file "-q" "/var/log/messages" 
+    m_check_file "i" && raise_failure "Failed to detect arg count incorrect"
+    m_check_file "-f" "" && raise_failure "Failed to detect empty arg[2]"
+    m_check_file "-q" "/var/log/messages" && raise_failure "Failed to detect invalid option"
+
+    #======================================
+    # All msgs from m_fail should be in FAIL
+    #======================================
+    assert_is_not_different "${EXP}" "${FAIL}"
+    
+    #======================================
+    # Cleardown for next test
+    #======================================
+    rm -f "${MU_TMP}/common.funcs"
 
 end
+
 #======================================
 # Test for m_get_usr_tag
 #======================================
@@ -188,7 +205,7 @@ def Test-m_get_usr_tag
     # Import the test lib and rigged m_fail
     #======================================
     ## Ensure we return a fail code from test m_fail
-    sed 's/\\(m_fail .*\\)/\\1 || return 1/g' "${FUT}" > "${MU_TMP}/common.funcs"
+    sed 's/\(m_fail .*\)/\1 || return 1/g' "${FUT}" > "${MU_TMP}/common.funcs"
     import "common.funcs"
     import m_fail_record_failure
     

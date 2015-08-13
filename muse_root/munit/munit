@@ -111,9 +111,13 @@ mu_log_line "Starting test run - (${MU_RUNID})" "INFO"
 # Create the runtime directories
 #======================================
 mkdir -p "${MU_TMP}"
+mkdir -p "${MU_RPT}"
+mkdir -p "${MU_EXP}"
+mkdir -p "${MU_BIN}"
 [[ -d "${MU_TMP}" ]] || die "Failed to create MUNIT TMP directory (${MU_TMP}) (munit)"
 [[ -d "${MU_RPT}" ]] || die "Failed to create MUNIT report directory (${MU_RPT}) (munit)"
 [[ -d "${MU_EXP}" ]] || die "Failed to create MUNIT exp directory (${MU_EXP}) (munit)"
+[[ -d "${MU_BIN}" ]] || die "Failed to create MUNIT exp directory (${MU_EXP}) (munit)"
 
 #======================================
 # Initialise the run environment
@@ -132,6 +136,7 @@ validate_cmd_line "$@"
 rm -rf "${MU_TMP}"/* || die "Cleardown of (${MU_TMP}) failed"
 rm -rf "${MU_EXP}"/* || die "Cleardown of (${MU_EXP}) failed"
 rm -rf "${MU_RPT}"/* || die "Cleardown of (${MU_RPT}) failed"
+rm -rf "${MU_BIN}"/* || die "Cleardown of (${MU_BIN}) failed"
 
 #======================================
 # Initialise the persistent error count
@@ -189,7 +194,7 @@ do
     :>"${MU_STDERR_BUF}"
     :>"${MU_STDOUT_BUF}"
     
-    "${MU_TMP}/${THISTEST}" > "${MU_STDOUT_BUF}" 2> "${MU_STDERR_BUF}"
+    "${MU_BIN}/${THISTEST}" > "${MU_STDOUT_BUF}" 2> "${MU_STDERR_BUF}"
 
     if [[ -s "${MU_STDERR_BUF}" ]]
     then
@@ -288,20 +293,38 @@ mu_printm "${RESSTR}"
 printf "%s\n" "${HEADLINE}" | tee -a "${MU_MASTER_RPT}"
 
 #======================================
+# Is this the 'self' test? If so we need
+# to diff the master report against the
+# expected report.
+#======================================
+mu_find_file mu_master_rpt.exp EXPRPT
+mu_get_exp_file mu_master_rpt ACTRPT
+cp "${MU_MASTER_RPT}" "${ACTRPT}"
+
+if ! diff  <( tail -n +5 "${ACTRPT}")  <(tail -n +5 "${EXPRPT}") >/dev/null 2>&1
+then
+    printf "%s\n\n" "${HEADLINE}"
+    printf "%s\n%s\n%s\n%s\n\n" "Unexpected differences found between master report" "(${ACTRPT})" "and expected report" "(${EXPRPT})"
+    diff  <( tail -n +5 "${ACTRPT}")  <(tail -n +5 "${EXPRPT}")
+    printf "\n%s\n" "${HEADLINE}"
+fi
+
+#======================================
 # Has user select to tar up exp files?
 #======================================
 if "${MU_TAR_EXPECTED_FILES}"
 then
+    TARGET_DIR="${MU_TST}/${MU_CURRENT_PROJECT}/resources"
     if ls "${MU_EXP}"/*.exp.* >/dev/null 2>&1
     then
         cd "${MU_EXP}"
         tarball=expected_results_$(date +"%d%m%Y%H%M%S").tar
         tar cvf "${tarball}" *.exp.* >/dev/null 2>&1 ||
             die "Failed to tar expected results in (${MU_EXP})"
-        mv "${tarball}" "${MU_START_DIR}" || die "Move failed for archive (${tarball}) to (${MU_START_DIR})"
+        mv "${tarball}" "${TARGET_DIR}" || die "Move failed for archive (${tarball}) to (${TARGET_DIR})"
         mu_printm "Archived expected result files "
         mu_printm "(${tarball})" 
-        mu_printm "moved to (${MU_START_DIR})"
+        mu_printm "moved to (${TARGET_DIR})"
     else
         mu_printm "User selected -ge option to archive new expected results but:"
         mu_printm "No expected results found in (${MU_EXP})" | tee -a "${MU_MASTER_RPT}"

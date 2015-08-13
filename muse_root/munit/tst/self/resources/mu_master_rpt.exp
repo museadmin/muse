@@ -1,0 +1,230 @@
+===========================================================================
+                           ( MUNIT ) Test Report
+                       Thu Aug 13 15:52:28 BST 2015
+                             Project - (self)
+===========================================================================
+Tests:
+	1    - self.mu_test_files.Test-FileExists-Pass
+	2    - self.mu_test_files.Test-FileExists-Fail
+	3    - self.mu_test_files.Test-RegularFileExists-Pass
+	4    - self.mu_test_files.Test-RegularFileExists-Fail
+	5    - self.mu_test_files.Test-RegularFileIsNotZeroSize-Pass
+	6    - self.mu_test_files.Test-RegularFileIsNotZeroSize-Fail
+	7    - self.mu_test_files.Test-FileIsDirectory-Pass
+	8    - self.mu_test_files.Test-FileIsDirectory-Fail
+	9    - self.mu_test_files.Test-IsBlockDevice-Pass
+	10   - self.mu_test_files.Test-IsBlockDevice-Fail
+	11   - self.mu_test_files.Test-IsCharacterDevice-Pass
+	12   - self.mu_test_files.Test-IsCharacterDevice-Fail
+	13   - self.mu_test_files.Test-IsNamedPipe-Pass
+	14   - self.mu_test_files.Test-IsNamedPipe-Fail
+	15   - self.mu_test_files.Test-IsTerminal-Pass
+	16   - self.mu_test_files.Test-IsTerminal-Fail
+	17   - self.mu_test_files.Test-FileIsOlder-Pass
+	18   - self.mu_test_files.Test-FileIsOlder-Fail
+	19   - self.mu_test_files.Test-FileIsNewer-Pass
+	20   - self.mu_test_files.Test-FileIsNewer-Fail
+	21   - self.mu_test_floats.Test-FloatEqual-Pass
+	22   - self.mu_test_floats.Test-FloatEqual-Fail
+	23   - self.mu_test_floats.Test-FloatNotEqual-Pass
+	24   - self.mu_test_floats.Test-FloatNotEqual-Fail
+	25   - self.mu_test_floats.Test-FloatLessThan-Pass
+	26   - self.mu_test_floats.Test-FloatLessThan-Fail
+	27   - self.mu_test_floats.Test-FloatGreaterThan-Pass
+	28   - self.mu_test_floats.Test-FloatGreaterThan-Fail
+	29   - self.mu_test_integers.Test-EqualIntegers-Equal
+	30   - self.mu_test_integers.Test-EqualIntegerAndVar-Equal
+	31   - self.mu_test_integers.Test-EqualIntegerLiterals-Unequal
+	32   - self.mu_test_integers.Test-EqualIntegerAndVar-Unequal
+	33   - self.mu_test_integers.Test-UnequalIntegers-NotEqual
+	34   - self.mu_test_integers.Test-UnequalIntegers-Equal
+	35   - self.mu_test_integers.Test-UnequalIntegers-NotSet
+	36   - self.mu_test_integers.Test-IntegerGreaterThan-Pass
+	37   - self.mu_test_integers.Test-IntegerGreaterThan-Fail
+	38   - self.mu_test_integers.Test-IntegerLessThan-Pass
+	39   - self.mu_test_integers.Test-IntegerLessThan-Fail
+	40   - self.mu_test_integers.Test-IntegerLessThanOrEqual-Equal
+	41   - self.mu_test_integers.Test-IntegerLessThanOrEqual-Less
+	42   - self.mu_test_integers.Test-IntegerLessThanOrEqual-Greater
+	43   - self.mu_test_integers.Test-IntegerGreaterThanOrEqual-Equal
+	44   - self.mu_test_integers.Test-IntegerGreaterThanOrEqual-Greater
+	45   - self.mu_test_integers.Test-IntegerGreaterThanOrEqual-Less
+	46   - self.mu_test_keywords.Test-RequireFile-Pass
+	47   - self.mu_test_keywords.Test-RequireFile-Fail
+	48   - self.mu_test_keywords.Test-RequireRegularFile-Pass
+	49   - self.mu_test_keywords.Test-RequireRegularFile-Fail
+	50   - self.mu_test_keywords.Test-RequireDir-Pass
+	51   - self.mu_test_keywords.Test-RequireDir-Fail
+	52   - self.mu_test_keywords.Test-Importfile-Pass
+	53   - self.mu_test_keywords.Test-Importfile-Fail
+	54   - self.mu_test_keywords.Test-RequireWhichApplication-Pass
+	55   - self.mu_test_keywords.Test-RequireWhichApplication-Fail
+	56   - self.mu_test_keywords.Test-RequireProcessRunning-Pass
+	57   - self.mu_test_keywords.Test-RequireProcessRunning-Fail
+	58   - self.mu_test_raise.Test-RaiseFailure
+	59   - self.mu_test_raise.Test-RaiseError
+	60   - self.mu_test_stderr.Test-BadAssert
+	61   - self.mu_test_strings.Test-EqualStringLiterals-Pass
+	62   - self.mu_test_strings.Test-EqualStringLiteralAndVar-Pass
+	63   - self.mu_test_strings.Test-EqualStrings-Fail
+	64   - self.mu_test_strings.Test-UnequalStrings-Pass
+	65   - self.mu_test_strings.Test-UnequalStrings-Fail
+	66   - self.mu_test_strings.Test-GreaterThanString-Pass
+	67   - self.mu_test_strings.Test-GreaterThanString-Fail
+	68   - self.mu_test_strings.Test-LessThanString-True
+	69   - self.mu_test_strings.Test-LessThanString-Fail
+	70   - self.mu_test_strings.Test-EmptyString-Pass
+	71   - self.mu_test_strings.Test-EmptyString-Fail
+	72   - self.mu_test_strings.Test-EmptyStringWithNull-Pass
+	73   - self.mu_test_strings.Test-EmptyStringWithNull-Fail
+	74   - self.mu_test_strings.Test-NonEmptyString-Pass
+	75   - self.mu_test_strings.Test-NonEmptyString-Fail
+	76   - self.mu_test_typos.Test-UnequalIntegers-NotSet
+Failures:
+
+	1 - self.mu_test_files.Test-FileExists-Fail
+		Expected file (/var/log/massages) not found
+		Fail with file not found
+		
+	2 - self.mu_test_files.Test-RegularFileExists-Fail
+		Expected file (/var/log/massages) not found
+		Fail with file not found
+		
+	3 - self.mu_test_files.Test-RegularFileIsNotZeroSize-Fail
+		Expected file (/var/tmp/munit/tmp/assert_file_not_zero.tmp) not found or empty
+		Fail with empty file found
+		
+	4 - self.mu_test_files.Test-FileIsDirectory-Fail
+		Expected file (/temple) not a directory
+		Fail with dir not found
+		
+	5 - self.mu_test_files.Test-IsBlockDevice-Fail
+		File under test (/var/log/messages) is not a block device
+		Fail because not block device
+		
+	6 - self.mu_test_files.Test-IsCharacterDevice-Fail
+		File under test (/var/log/messages) is not a character device
+		Fail because not character device
+		
+	7 - self.mu_test_files.Test-IsNamedPipe-Fail
+		File under test (/var/log/messages) is not a named pipe
+		Fail because file is not a named pipe
+		
+	8 - self.mu_test_files.Test-IsTerminal-Fail
+		File under test (/var/log/messages) is not a terminal
+		Fail because file is not a terminal
+		
+	9 - self.mu_test_files.Test-FileIsOlder-Fail
+		Expected (/var/tmp/munit/tmp/munit_newfile) older than (/var/log/messages)
+		but got (/var/tmp/munit/tmp/munit_newfile) newer than (/var/log/messages)
+		Fail because file newer
+		
+	10 - self.mu_test_files.Test-FileIsNewer-Fail
+		Expected (/var/log/messages) newer than (/var/tmp/munit/tmp/munit_newfile)
+		but got (/var/log/messages) older than (/var/tmp/munit/tmp/munit_newfile)
+		Fail because file older
+		
+	11 - self.mu_test_floats.Test-FloatEqual-Fail
+		Expected (02.235) == (1.235) but got (02.235) != (1.235)
+		Fail because unequal
+		
+	12 - self.mu_test_floats.Test-FloatNotEqual-Fail
+		Expected (01.235) != (1.235) but got (01.235) == (1.235)
+		Fail because equal
+		
+	13 - self.mu_test_floats.Test-FloatLessThan-Fail
+		Expected (1.9) < (1.8) but got (1.9) >= (1.8)
+		Test should fail as 1.9 > 1.8
+		
+	14 - self.mu_test_floats.Test-FloatGreaterThan-Fail
+		Expected (1.9) > (1.9) but got (1.9) <= (1.9)
+		Test should fail as 1.9 == 1.9
+		
+	15 - self.mu_test_integers.Test-EqualIntegerLiterals-Unequal
+		Expected (100) == (101) but got (100) != (101)
+		
+	16 - self.mu_test_integers.Test-EqualIntegerAndVar-Unequal
+		Expected (100) == (101) but got (100) != (101)
+		Fail because not equal
+		
+	17 - self.mu_test_integers.Test-UnequalIntegers-Equal
+		Expected (100) != (100) but got (100) == (100)
+		Fail because equal
+		
+	18 - self.mu_test_integers.Test-IntegerGreaterThan-Fail
+		Expected (100) > (101) but got (100) <= (101)
+		Fail because lesser
+		
+	19 - self.mu_test_integers.Test-IntegerLessThan-Fail
+		Expected (100) < (99) but got (100) >= (99)
+		Fail because greater
+		
+	20 - self.mu_test_integers.Test-IntegerLessThanOrEqual-Greater
+		Expected (22) <= (21) but got (22) > (21)
+		Fail because greater
+		
+	21 - self.mu_test_integers.Test-IntegerGreaterThanOrEqual-Less
+		Expected (19) >= (20) but got (19) < (20)
+		Fail because less than
+		
+	22 - self.mu_test_raise.Test-RaiseFailure
+		This is a raised failure
+
+	23 - self.mu_test_strings.Test-EqualStrings-Fail
+		Expected (str1) == (str2) but got (str1) != (str2)
+		Fail because unequal
+		
+	24 - self.mu_test_strings.Test-UnequalStrings-Fail
+		Expected (str1) != (str1) but got (str1) == (str1)
+		Should not be equal strings
+		
+	25 - self.mu_test_strings.Test-GreaterThanString-Fail
+		Expected (abc) > (bcd) but got (abc) <= (bcd)
+		Fail because lesser
+		
+	26 - self.mu_test_strings.Test-LessThanString-Fail
+		Expected (bcd) < (abc) but got (bcd) >= (abc)
+		Fail because greater
+		
+	27 - self.mu_test_strings.Test-EmptyString-Fail
+		Expected ("") but got (Test String)
+		Fail because not empty
+		
+	28 - self.mu_test_strings.Test-EmptyStringWithNull-Fail
+		Expected non empty string but got ()
+		
+	29 - self.mu_test_strings.Test-NonEmptyString-Fail
+		Expected non empty string but got ()
+		Fail because empty
+		
+	30 - self.mu_test_typos.Test-UnequalIntegers-NotSet
+		Expected (100) == () but got (100) != ()
+		
+Errors:
+
+	1 - self.mu_test_keywords.Test-RequireFile-Fail
+		Required file (testing.res) not found
+
+	2 - self.mu_test_keywords.Test-RequireRegularFile-Fail
+		Required file (testing.res) not found
+
+	3 - self.mu_test_keywords.Test-RequireDir-Fail
+		Required directory (/tmp/not-existant-dir) not found
+
+	4 - self.mu_test_keywords.Test-Importfile-Fail
+		Import file (testing.res) not found
+
+	5 - self.mu_test_keywords.Test-RequireWhichApplication-Fail
+		Required application (missing-app) not found
+
+	6 - self.mu_test_keywords.Test-RequireProcessRunning-Fail
+		Required process (wibble-wobble) not running
+
+	7 - self.mu_test_raise.Test-RaiseError
+		This is a raised error
+
+	8 - self.mu_test_stderr.Test-BadAssert
+		/var/tmp/munit/bin/self.mu_test_stderr.Test-BadAssert: line 15: asert_less_than_float: command not found
+===========================================================================
+          (76) Tests, (61) Assertions, (30) Failures. (8) Errors
+===========================================================================

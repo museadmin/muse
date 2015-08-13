@@ -46,6 +46,7 @@ set -a
     MU_TMP="${MU_ROOT}/tmp"
     MU_RPT="${MU_ROOT}/rpt"
     MU_EXP="${MU_ROOT}/exp"
+    MU_BIN="${MU_ROOT}/bin"
     MU_MUNIT_MAP="${MU_TMP}/mu_test_map"
 
     #======================================
@@ -93,6 +94,7 @@ mu_validate_environment()
     [[ "${MU_TST}" =~ ^/.*/tst ]] || die "MU_CTL validation failed (${FUNCNAME})"
     [[ "${MU_TMP}" =~ ^/.*/tmp ]] || die "MU_TMP validation failed (${FUNCNAME})"
     [[ "${MU_EXP}" =~ ^/.*/exp ]] || die "MU_EXP validation failed (${FUNCNAME})"
+    [[ "${MU_BIN}" =~ ^/.*/bin ]] || die "MU_BIN validation failed (${FUNCNAME})"
     [[ "${MU_MUNIT_MAP}" =~ ^/.*/mu_test_map ]] || die "MU_MUNIT_MAP validation failed (${FUNCNAME})"
     [[ "${MU_TEST_LOG}" =~ ^/.*/mu_test_log ]] || die "MU_TEST_LOG validation failed (${FUNCNAME})"
     [[ "${MU_TEST_BUF}" =~ ^/.*/mu_test_buf ]] || die "MU_TEST_BUF validation failed (${FUNCNAME})"
@@ -178,6 +180,7 @@ usage()
     printf "\t%s\n" "${0##*/} -a <name>      : Create a new project structure"
     printf "\t%s\n" "${0##*/} -ge            : Collect all new expected results files"
     printf "\t%s\n" "${0##*/} -t             : Select project and test/s"
+    printf "\t%s\n" "${0##*/} -va            : View available assertions"
     printf "\t%s\n" "${0##*/} -x             : Run tests in debug mode"
     printf "\n%s\n" "${HEADLINE}"
     exit
@@ -252,7 +255,7 @@ mu_check_test_suite_format()
 ##############################################################
 mu_create_test_files()
 {
-    local TEST_SUITE= TMPFILE1= TMPFILE2= LINE= RCNT= UCNT= DCNT=-1
+    local TEST_SUITE= TMPFILE1= TMPFILE2= LINE= RCNT= UCNT= DCNT=-1 BUF=
     #======================================
     # Loop through all test suites
     #======================================
@@ -273,18 +276,26 @@ mu_create_test_files()
         # SUITE_NAME.TEST_NAME.tst in MU_TMP
         # Add name to run array
         # Copy test lines into file with #!
-        # Move this into a function and call it
         #======================================
-        while read LINE
+
+        #======================================
+        # Get the start and end of each test
+        #======================================
+        mu_get_tmp_file "${FUNCNAME}" BUF
+        awk '/^def/{printf "%s %d ", $2, NR}
+             /^end/{printf "%d\n", NR}' "${TESTSUITE}" > "${BUF}"
+                    
+        #======================================
+        # Now create a script for each test
+        #======================================
+        while read TNAME DEF END
         do
-            if [[ "${LINE}" =~ ^"TEST=" ]] 
-            then
                 #======================================
                 # Record the testname in the run array
                 #======================================
-                TEST_NAME=${MU_CURRENT_PROJECT}${MC_NAME_SEP}${TEST_SUITE}${MC_NAME_SEP}$(echo "${LINE}" | cut -d"=" -f2)
+                TEST_NAME=${MU_CURRENT_PROJECT}${MC_NAME_SEP}${TEST_SUITE}${MC_NAME_SEP}$(echo "${TNAME}" | cut -d"=" -f2)
                 MU_RUN_ORDER[$(( MU_RUN_INDEX += 1 ))]="${TEST_NAME}"
-                TEST_FILE="${MU_TMP}/${TEST_NAME}"
+                TEST_FILE="${MU_BIN}/${TEST_NAME}"
                 printf "%s\n" "#! /bin/bash" > "${TEST_FILE}"
                 [[ "${MU_DEBUG_TEST}" == "TRUE" ]] && printf "%s\n" "set -x" >> "${TEST_FILE}"
                 printf "%s\n" "export THIS_TEST_NAME=${TEST_NAME}" >> "${TEST_FILE}"
@@ -316,12 +327,14 @@ mu_create_test_files()
                 #======================================
                 printf "%s" "0 0 0" > "${MU_RPT}/${TEST_NAME}.sts"
                 :>"${MU_RPT}/${TEST_NAME}.rpt"
-            else
-                printf "%s\n" "$LINE" >> "${TEST_FILE}"
-            fi
-        done < <( awk '/^def/{printf "%s%s\n", "TEST=", $2;next}
-                        !/^end/{printf "%s\n", $0}
-                            ' FS=" " "${TESTSUITE}")
+                
+                #======================================
+                # Now append each line of the test
+                #======================================
+                awk -v st="${DEF}" -v en="${END}" '
+                    (NR > st && NR < en){printf "%s\n", $0}' "${TESTSUITE}" >> "${TEST_FILE}"
+
+        done < "${BUF}"
     done
 
     #======================================
@@ -433,57 +446,6 @@ validate_cmd_line()
                 [[ $# -eq 0 ]] && usage
                 MU_TAR_EXPECTED_FILES=true
             ;;
-            -la)
-                #======================================
-                # List all assertions in sorted order
-                #======================================
-                clear
-                echo "${HLINE}"
-                echo "Choose an Assertion"
-                echo "${HLINE}"
-
-                PS3='Select to view definition: '
-                OPTIONS=($(sed 's/()//g' < <(sort < <(for f in $(ls "${MU_LIB}"); do egrep ^assert_ "${MU_LIB}/$f"; done) | tr "\n" " ")) "Quit")
-                select OPT in "${OPTIONS[@]}"
-                do
-                    ## Choice out of range
-                    [[ "${REPLY}" -gt "${#OPTIONS[@]}" ]] && continue
-
-                    case "${OPT}" in
-                        "Quit")
-                            exit
-                            ;;
-                        *)
-                            #======================================
-                            # User wants to see Assertion def
-                            #======================================
-                            THIS_ASSERTION="${OPT}"
-
-                            #======================================
-                            # First find the file with this assert
-                            #======================================
-                            while read LINE
-                            do
-                                FNAME=$(echo "${LINE}" | cut -d":" -f1)
-                                ANAME=$(echo "${LINE}" | cut -d":" -f2 | sed 's/()//g')
-                                [[ "${ANAME}" == "${THIS_ASSERTION}" ]] && break
-                            done < <(egrep ^assert_ "${MU_LIB}/"* 2>/dev/null)
-                            [[ -n "${FNAME}" ]] || die "Failed to recover assertion file name"
-
-                            clear
-
-                            awk -v p=${ANAME} -v f=1 '
-                                ((f == 1) && (NR == FNR) && ($0 ~ /^## Name/) && ($NF == p)) {fs = (NR -2)}
-                                    ((f == 1) && (NR == FNR) && (fs != 0) && ($0 ~ /^}/)){fe = NR;f = 2}
-                                        ((NR != FNR) && (FNR >= fs) && (FNR <= fe)){print}
-                                            ' "${FNAME}" "${FNAME}"
-                            break
-                        ;;
-                    esac
-
-                done
-                exit
-            ;;
             mu_*)
                 #======================================
                 # User wants to run specific test/s
@@ -579,6 +541,78 @@ validate_cmd_line()
                     echo "${HLINE}"
                     exit
                 fi
+            ;;
+            -va)
+                ## Force a single column menu
+                export COLUMNS=1
+                
+                #======================================
+                # List all assertions in sorted order
+                #======================================
+                clear
+                echo "${HLINE}"
+                echo "Choose a Library"
+                echo "${HLINE}"
+                PS3='Select a Library: '
+                OPTIONS=($(for f in $(ls "${MU_LIB}/"assert-*)
+                         do 
+                             echo $(basename $f)
+                         done)
+                             "Quit")
+                select OPT in "${OPTIONS[@]}"
+                do
+                    ## Choice out of range
+                    [[ "${REPLY}" -gt "${#OPTIONS[@]}" ]] && continue
+                    FILE="${OPT}"
+
+                    #======================================
+                    # List all assertions in sorted order
+                    #======================================
+                    clear
+                    echo "${HLINE}"
+                    echo "Choose an Assertion"
+                    echo "${HLINE}"
+                    PS3='Select to view definition: '
+                    OPTIONS=($(sed 's/()//g' < <(sort < <(egrep ^assert_ "${MU_LIB}/${FILE}") | tr " " "\n")) "Quit")
+                    select OPT in "${OPTIONS[@]}"
+                    do
+                        ## Choice out of range
+                        [[ "${REPLY}" -gt "${#OPTIONS[@]}" ]] && continue
+
+                        case "${OPT}" in
+                            "Quit")
+                                exit
+                                ;;
+                            *)
+                                #======================================
+                                # User wants to see Assertion def
+                                #======================================
+                                THIS_ASSERTION="${OPT}"
+
+                                #======================================
+                                # First find the file with this assert
+                                #======================================
+                                while read LINE
+                                do
+                                    FNAME=$(echo "${LINE}" | cut -d":" -f1)
+                                    ANAME=$(echo "${LINE}" | cut -d":" -f2 | sed 's/()//g')
+                                    [[ "${ANAME}" == "${THIS_ASSERTION}" ]] && break
+                                done < <(egrep ^assert_ "${MU_LIB}/"* 2>/dev/null)
+                                [[ -n "${FNAME}" ]] || die "Failed to recover assertion file name"
+
+                                clear
+
+                                awk -v p=${ANAME} -v f=1 '
+                                    ((f == 1) && (NR == FNR) && ($0 ~ /^## Name/) && ($NF == p)) {fs = (NR -2)}
+                                        ((f == 1) && (NR == FNR) && (fs != 0) && ($0 ~ /^}/)){fe = NR;f = 2}
+                                            ((NR != FNR) && (FNR >= fs) && (FNR <= fe)){print}
+                                                ' "${FNAME}" "${FNAME}"
+                                break
+                            ;;
+                        esac
+                    done
+                    exit
+                done
             ;;
             -x)
                 #======================================

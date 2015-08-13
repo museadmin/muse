@@ -30,6 +30,7 @@ def Test-RequireAllLibraries-Pass
     require_regular_file "slave.funcs"
     require_regular_file "muse_mapper.funcs"
 end
+
 #======================================
 # Confirm all env files present
 #======================================
