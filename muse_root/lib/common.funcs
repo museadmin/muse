@@ -19,9 +19,9 @@
 ## Date         :   16/05/2014
 ## Args         :   1 - File name
 ##                  2 - VAR to return md5sum
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
+## Status       :   Reviewed    [y]
+##                  Tested      [y]
+##                  Released    [y]
 ##############################################################
 m_get_md5sum()
 {
@@ -44,9 +44,9 @@ m_get_md5sum()
 ## Date         :   20/07/2012
 ## Args         :   1 - Properties eg -frwx
 ##                  2 - fully qualified name
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
+## Status       :   Reviewed    [y]
+##                  Tested      [y]
+##                  Released    [y]
 ##
 ##############################################################
 m_check_file()
@@ -83,13 +83,13 @@ m_check_file()
 ##                  3 - -min Optional min depth for find
 ##                  4 - -max Optional max depth for find
 ##                  5 - Top level directory for find
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
+## Status       :   Reviewed    [y]
+##                  Tested      [y]
+##                  Released    [y]
 ##############################################################
 m_get_file_data()
 {
-    [[ $# > 7 ]] && m_fail 1 "Error: Usage args (${FUNCNAME})"  
+    [[ $# -le 7 ]] || m_fail 1 "Error: Usage args (${FUNCNAME})"  
 
     local SORT="cat" OPT="-l" TYPE="f" MIN_D= MAX_D= 
 
@@ -143,9 +143,9 @@ m_get_file_data()
 ##                  viable directory name.
 ## Date         :   19/08/2012
 ## Args         :   
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
+## Status       :   Reviewed    [y]
+##                  Tested      [y]
+##                  Released    [y]
 ##############################################################
 m_get_usr_tag()
 {
@@ -199,19 +199,27 @@ m_log_msg()
 ## Description  :   Create an expected results file with a unique name.
 ## Date         :   28/08/2012
 ## Args         :   1 - Name of function or script requiring file
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
+##                  2 - MUSE var to return path to file
+## Status       :   Reviewed    [y]
+##                  Tested      [y]
+##                  Released    [y]
 ##############################################################
 m_get_exp_file()
 {
-    [[ $# -eq 1 ]] || exit 1
+    [[ $# -eq 2 ]] || m_fail 2 "Error: Usage. Arg count. 2 expected (${FUNCNAME})" 
+    [[ -n "${1}" ]] || m_fail 2 "Error: Usage. Arg[1]. String expected (${FUNCNAME})" 
+    [[ ${2} =~ ^[0-9A-Z_]+$ ]] || m_fail 2 "Error: Usage. Args [2]. MUSE variable name expected (${FUNCNAME})" 
 
-    local FILE="${M_NEWEXP}/${1}_${RANDOM}.exp"
+    local FILE="${M_NEWEXP}/${1}.exp.${RANDOM}"
 
-    :>"${FILE}" || exit 2
+    while [[ -f "${FILE}" ]] 
+    do
+        FILE="${M_NEWEXP}/${1}.exp.${RANDOM}"
+    done
 
-    echo "${FILE}"
+    :>"${FILE}" || m_fail 2 "Error: Failed to write to exp file (${FILE}) (${FUNCNAME})" 
+
+    eval "${2}"="${FILE}"
 }
 ##############################################################
 ##

@@ -297,16 +297,19 @@ printf "%s\n" "${HEADLINE}" | tee -a "${MU_MASTER_RPT}"
 # to diff the master report against the
 # expected report.
 #======================================
-mu_find_file mu_master_rpt.exp EXPRPT
-mu_get_exp_file mu_master_rpt ACTRPT
-cp "${MU_MASTER_RPT}" "${ACTRPT}"
-
-if ! diff  <( tail -n +5 "${ACTRPT}")  <(tail -n +5 "${EXPRPT}") >/dev/null 2>&1
+if [[ "${MU_CURRENT_PROJECT}" == "self" ]]
 then
-    printf "%s\n\n" "${HEADLINE}"
-    printf "%s\n%s\n%s\n%s\n\n" "Unexpected differences found between master report" "(${ACTRPT})" "and expected report" "(${EXPRPT})"
-    diff  <( tail -n +5 "${ACTRPT}")  <(tail -n +5 "${EXPRPT}")
-    printf "\n%s\n" "${HEADLINE}"
+    mu_find_file mu_master_rpt.exp EXPRPT
+    mu_get_exp_file mu_master_rpt ACTRPT
+    cp "${MU_MASTER_RPT}" "${ACTRPT}"
+
+    if ! diff  <( tail -n +5 "${ACTRPT}")  <(tail -n +5 "${EXPRPT}") >/dev/null 2>&1
+    then
+        printf "%s\n\n" "${HEADLINE}"
+        printf "%s\n%s\n%s\n%s\n\n" "Unexpected differences found between master report" "(${ACTRPT})" "and expected report" "(${EXPRPT})"
+        diff  <( tail -n +5 "${ACTRPT}")  <(tail -n +5 "${EXPRPT}")
+        printf "\n%s\n" "${HEADLINE}"
+    fi
 fi
 
 #======================================

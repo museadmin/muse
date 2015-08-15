@@ -1,0 +1,5 @@
+Call to m_fail with code (1) and msg (Error: Usage args (m_get_file_data))
+Call to m_fail with code (1) and msg (Error: Min depth param (m_get_file_data))
+Call to m_fail with code (1) and msg (Error: Max depth param (m_get_file_data))
+Call to m_fail with code (1) and msg (Error: Unrecognised option (-wibble) (m_get_file_data))
+Call to m_fail with code (1) and msg (Error: Not a directory (/var/log/messages) (m_get_file_data))

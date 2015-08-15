@@ -92,6 +92,36 @@ def Test-m_get_file_data
     m_get_file_data -s -min 1 -max 2 "m_test1_dirs" > "${TMPEXP4}"
     assert_is_not_different "${TMPEXP4}" "${EXP4}" "Test 4 failed"
 
+    #======================================
+    # Test error pathways - setup
+    #======================================
+    mu_get_exp_file m_get_file_data-5 FAIL
+    export M_FAIL="${FAIL}"
+
+    mu_find_file common.funcs FUT
+    sed 's/\(m_fail .*\)/\1 || return 1/g' "${FUT}" > "${MU_TMP}/common.funcs"
+    ## Overwrite previous import
+    import "common.funcs"
+    import m_fail_record_failure
+
+    ## Wrong arg count
+    m_get_file_data "1" "2" "3" "4" "5" "6" "7" "8" && raise_failure "Failed to trap arg count error"
+    ## Min depth non numeric
+    m_get_file_data -s -min "wibble" -max 2 "m_test1_dirs" > /dev/null && raise_failure "Failed to trap non numeric min"
+    ## Max depth non numeric
+    m_get_file_data -s -min 1 -max "wibble" "m_test1_dirs" > /dev/null && raise_failure "Failed to trap non numeric min"
+    ## Unrecognised option
+    m_get_file_data -wibble -min 1 -max 2 "m_test1_dirs" > /dev/null && raise_failure "Failed to trap unrecognised option"
+    ## Non directory 
+    m_get_file_data -s -min 1 -max 2 "/var/log/messages" > /dev/null && raise_failure "Failed to trap non directory"
+
+    #======================================
+    # Compare the error messages to those 
+    # expected
+    #======================================
+    mu_find_file m_get_file_data-5.exp EXPERR
+    assert_is_not_different "${EXPERR}" "${FAIL}"
+
     cd - >/dev/null 2>&1
 
 end
@@ -123,8 +153,37 @@ def Test-m_get_md5sum
     # Do the test
     #======================================
     m_get_md5sum m_get_md5sum.txt MD
-    
     assert_equal_string "${MD}" $(cat "${EXP}")
+
+    #======================================
+    # Test error pathways - setup
+    #======================================
+    mu_get_exp_file m_get_md5sum-1 FAIL
+    export M_FAIL="${FAIL}"
+
+    mu_find_file common.funcs FUT
+    sed 's/\(m_fail .*\)/\1 || return 1/g' "${FUT}" > "${MU_TMP}/common.funcs"
+    ## Overwrite previous import
+    import "common.funcs"
+    import m_fail_record_failure
+
+    ## Arg count error
+    m_get_md5sum m_get_md5sum.txt && raise_failure "Failed to trap incorrect arg count"
+    ## Empty string arg 1
+    m_get_md5sum "" 2 && raise_failure "Failed to trap empty string arg[1]"
+    ## MUSE var expected
+    m_get_md5sum m_get_md5sum.txt md && raise_failure "Failed to trap for MUSE var name"
+
+    #======================================
+    # Check error string against expected
+    #======================================
+    mu_find_file m_get_md5sum-1.exp EXPERR
+    assert_is_not_different "${EXPERR}" "${FAIL}"
+
+    #======================================
+    # Cleanup
+    #======================================
+    [[ -f "${MU_TMP}/common.funcs" ]] && rm -f "${MU_TMP}/common.funcs"
 
 end
 
@@ -158,6 +217,7 @@ def Test-m_check_file
 
     mu_find_file common.funcs FUT
     sed 's/\(m_fail .*\)/\1 || return 1/g' "${FUT}" > "${MU_TMP}/common.funcs"
+    ## Overwrite previous import
     import "common.funcs"
     import m_fail_record_failure
     
@@ -206,6 +266,7 @@ def Test-m_get_usr_tag
     #======================================
     ## Ensure we return a fail code from test m_fail
     sed 's/\(m_fail .*\)/\1 || return 1/g' "${FUT}" > "${MU_TMP}/common.funcs"
+    ## Overwrite previous import
     import "common.funcs"
     import m_fail_record_failure
     
@@ -233,4 +294,55 @@ def Test-m_get_usr_tag
     #======================================
     assert_is_not_different "${EXP}" "${FAIL}"
 
+    [[ -f "${MU_TMP}/common.funcs" ]] && rm -f "${MU_TMP}/common.funcs"
+
+end
+
+#======================================
+# Test for m_get_exp_file 
+#======================================
+def Test-m_get_exp_file
+    #======================================
+    # Requires
+    #======================================
+    require_file common.funcs
+    require_file m_fail_record_failure
+    require_file m_get_exp_file.exp
+    import m_fail_raise_error
+    import common.funcs
+   
+    #======================================
+    # Run the positive test
+    #======================================
+    M_NEWEXP="${MU_TMP}"
+    m_get_exp_file Test-m_get_exp_file EXPFILE 
+    if ! ls  "${MU_TMP}"/Test-m_get_exp_file.exp.[0-9]* >/dev/null 2>&1
+    then
+        raise_failure "Failed to create exp file with call to m_get_exp_file"
+    fi
+
+    #======================================
+    # Run the negative scenarios
+    #======================================
+    mu_find_file common.funcs FUT
+    sed 's/\(m_fail .*\)/\1 || return 1/g' "${FUT}" > "${MU_TMP}/common.funcs"
+    import common.funcs
+    import m_fail_record_failure
+    
+    ## Rig test version of m_fail
+    mu_get_exp_file m_get_exp_file FAIL
+    export M_FAIL="${FAIL}"
+
+    ## Arg count
+    m_get_exp_file Test-m_get_exp_file && raise_failure "Failed to trap incorrect arg count"
+    ## Arg one empty string
+    m_get_exp_file "" EXPFILE && raise_failure "Failed to trap empty string arg 1"
+    ## Non MUSE var name in $2
+    m_get_exp_file Test-m_get_exp_file expfile && raise_failure "Failed to trap non MUSE name for var"
+
+    mu_find_file m_get_exp_file.exp EXP
+    
+    assert_is_not_different "${EXP}" "${FAIL}"
+
+    [[ -f "${MU_TMP}/common.funcs" ]] && rm -f "${MU_TMP}/common.funcs"
 end
