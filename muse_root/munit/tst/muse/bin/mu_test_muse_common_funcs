@@ -123,6 +123,11 @@ def Test-m_get_file_data
     assert_is_not_different "${EXPERR}" "${FAIL}"
 
     cd - >/dev/null 2>&1
+    
+    #======================================
+    # Cleanup
+    #======================================
+    [[ -f "${MU_TMP}/common.funcs" ]] && rm -f "${MU_TMP}/common.funcs"
 
 end
 
@@ -233,7 +238,8 @@ def Test-m_check_file
     #======================================
     # Cleardown for next test
     #======================================
-    rm -f "${MU_TMP}/common.funcs"
+    [[ -f "${MU_TMP}/common.funcs" ]] && rm -f "${MU_TMP}/common.funcs"
+
 
 end
 
@@ -311,7 +317,7 @@ def Test-m_get_exp_file
     import m_fail_raise_error
     import common.funcs
    
-    #======================================
+    #==============================3yy========
     # Run the positive test
     #======================================
     M_NEWEXP="${MU_TMP}"
@@ -341,8 +347,122 @@ def Test-m_get_exp_file
     m_get_exp_file Test-m_get_exp_file expfile && raise_failure "Failed to trap non MUSE name for var"
 
     mu_find_file m_get_exp_file.exp EXP
-    
+    #======================================
+    # All msgs from m_fail should be in FAIL
+    #======================================
     assert_is_not_different "${EXP}" "${FAIL}"
 
     [[ -f "${MU_TMP}/common.funcs" ]] && rm -f "${MU_TMP}/common.funcs"
 end
+#======================================
+# Test for m_get_unique_tmp_file
+#======================================
+def Test-m_get_unique_tmp_file
+    #======================================
+    # Requires
+    #======================================
+    require_file common.funcs
+    require_file m_fail_record_failure
+    require_file m_fail_raise_error
+    import m_fail_raise_error
+    import common.funcs
+
+    export M_TMP="${MU_TMP}"
+    
+    #==============================3yy========
+    # Run the positive test
+    #======================================
+    m_get_unique_tmp_file Test-m_get_unique_tmp_file TMPFILE
+    assert_file_exists "${MU_TMP}/Test-m_get_unique_tmp_file.tmp."[0-9]*
+
+    #======================================
+    # Negative Tests
+    #======================================
+    mu_find_file common.funcs FUT
+    sed 's/\(m_fail .*\)/\1 || return 1/g' "${FUT}" > "${MU_TMP}/common.funcs"
+    import common.funcs
+    import m_fail_record_failure
+
+    ## Rig test version of m_fail
+    mu_get_exp_file m_get_unique_tmp_file FAIL
+    export M_FAIL="${FAIL}"
+
+    ## Arg count
+    m_get_unique_tmp_file Test-m_get_unique_tmp_file && raise_failure "Failed to trap invalid arg count"
+    ## Empty string $1
+    m_get_unique_tmp_file "" TMPFILE && raise_failure "Failed to trap empty string in arg 1"
+    ## Invalid var name in $2
+    m_get_unique_tmp_file Test-m_get_unique_tmp_file tmpfile && raise_failure "Failed to trap invlaid var name in arg 2"
+    ## M_TMP not set 
+    export M_TMP=
+    m_get_unique_tmp_file Test-m_get_unique_tmp_file TMPFILE && raise_failure "Failed to trap M_TMP not set"
+    ## Fail to write to new tmp file
+    export M_TMP="/"
+    m_get_unique_tmp_file Test-m_get_unique_tmp_file TMPFILE 2>/dev/null && raise_failure "Failed to trap failure to write"
+
+    mu_find_file m_get_unique_tmp_file.exp EXP
+    #======================================
+    # All msgs from m_fail should be in FAIL
+    #======================================
+    assert_is_not_different "${EXP}" "${FAIL}"
+
+    [[ -f "${MU_TMP}/common.funcs" ]] && rm -f "${MU_TMP}/common.funcs"
+end
+#======================================
+# Test for m_get_tmp_file
+#======================================
+def Test-m_get_tmp_file
+    #======================================
+    # Requires
+    #======================================
+    require_file common.funcs
+    require_file m_fail_record_failure
+    require_file m_fail_raise_error
+    import m_fail_raise_error
+    import common.funcs
+
+    export M_TMP="${MU_TMP}"
+    
+    #==============================3yy========
+    # Run the positive test
+    #======================================
+    m_get_tmp_file Test-m_get_tmp_file TMPFILE
+    assert_file_exists "${MU_TMP}/Test-m_get_tmp_file.tmp"
+
+    #======================================
+    # Negative Tests
+    #======================================
+    mu_find_file common.funcs FUT
+    sed 's/\(m_fail .*\)/\1 || return 1/g' "${FUT}" > "${MU_TMP}/common.funcs"
+    import common.funcs
+    import m_fail_record_failure
+
+    ## Rig test version of m_fail
+    mu_get_exp_file m_get_tmp_file FAIL
+    export M_FAIL="${FAIL}"
+
+    ## Arg count
+    m_get_tmp_file Test-m_get_unique_tmp_file && raise_failure "Failed to trap invalid arg count"
+    ## Empty string $1
+    m_get_tmp_file "" TMPFILE && raise_failure "Failed to trap empty string in arg 1"
+    ## Invalid var name in $2
+    m_get_tmp_file Test-m_get_tmp_file tmpfile && raise_failure "Failed to trap invlaid var name in arg 2"
+    ## M_TMP not set 
+    export M_TMP=
+    m_get_tmp_file Test-m_get_tmp_file TMPFILE && raise_failure "Failed to trap M_TMP not set"
+    ## Fail to write to new tmp file
+    export M_TMP="/"
+    m_get_tmp_file Test-m_get_tmp_file TMPFILE 2>/dev/null && raise_failure "Failed to trap failure to write"
+
+    mu_find_file m_get_tmp_file.exp EXP
+    #======================================
+    # All msgs from m_fail should be in FAIL
+    #======================================
+    assert_is_not_different "${EXP}" "${FAIL}"
+
+    [[ -f "${MU_TMP}/common.funcs" ]] && rm -f "${MU_TMP}/common.funcs"
+end
+
+
+
+

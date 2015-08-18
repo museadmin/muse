@@ -1,0 +1,5 @@
+Call to m_fail with code (13) and msg (Error: Usage args. 2 expected. (m_get_unique_tmp_file))
+Call to m_fail with code (13) and msg (Error: Usage args [1]. Empty string not expected.  (m_get_unique_tmp_file))
+Call to m_fail with code (13) and msg (Error: Usage args [2]. MUSE variable name expected. (m_get_unique_tmp_file))
+Call to m_fail with code (13) and msg (Error: M_TMP not set (m_get_unique_tmp_file))
+Call to m_fail with code (13) and msg (Error: Failed to write to tmp file () (m_get_unique_tmp_file))
