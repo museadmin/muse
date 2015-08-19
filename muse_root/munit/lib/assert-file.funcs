@@ -93,7 +93,7 @@ assert_file_not_zero()
 } >> "${MU_RPT}/${THIS_TEST_NAME}.rpt"
 ##############################################################
 ##
-## Name         :   assert_file_file_is_dir
+## Name         :   assert_file_is_dir
 ## Author       :   Bradley Atkins
 ## Description  :   Test regular file exists and is a dir
 ## Date         :   04/08/2015

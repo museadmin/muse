@@ -245,7 +245,7 @@ m_get_unique_tmp_file()
     [[ $# -eq 2 ]] || m_fail 13 "Error: Usage args. 2 expected. (${FUNCNAME})" 
     [[ -n ${1} ]] || m_fail 13 "Error: Usage args [1]. Empty string not expected.  (${FUNCNAME})" 
     [[ ${2} =~ ^[A-Z0-9_]+$ ]] || m_fail 13 "Error: Usage args [2]. MUSE variable name expected. (${FUNCNAME})" 
-    local TF="${M_TMP}/${RANDOM}"
+    local TF="${M_TMP}/${1}.tmp.${RANDOM}"
 
     #======================================
     # Create a file name in the tmp files 
@@ -254,11 +254,11 @@ m_get_unique_tmp_file()
     [[ -d "${M_TMP}" ]] || m_fail 13 "Error: M_TMP not set (${FUNCNAME})" 
     while [[ -f "${TF}" ]]
     do
-        TF="${M_TMP}/${RANDOM}"
+        TF="${M_TMP}/${1}.tmp.${RANDOM}"
     done
     
     ## Instantiate it with a null write
-    :>"${TF}" || m_fail 2 "Error: Failed to write to tmp file (${FILE}) (${FUNCNAME})" 
+    :>"${TF}" || m_fail 13 "Error: Failed to write to tmp file (${FILE}) (${FUNCNAME})" 
 
     ## Return the path to the new file
     eval ${2}="${TF}" || m_fail 13 "Error: Variable assignement failed (${FUNCNAME})" 
@@ -292,7 +292,7 @@ m_get_tmp_file()
     local FILE="${M_TMP}/${1}.tmp"
     
     ## Instantiate it with a null write
-    :>"${FILE}" || m_fail 2 "Error: Failed to write to tmp file (${FILE}) (${FUNCNAME})" 
+    :>"${FILE}" || m_fail 13 "Error: Failed to write to tmp file (${FILE}) (${FUNCNAME})" 
 
     ## Return the path to the file
     eval ${2}="${FILE}" || m_fail 13 "Error: variable assignment failed.  (${FUNCNAME})" 

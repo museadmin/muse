@@ -155,4 +155,27 @@ assert_not_empty_string()
     printf "%s\n%s\n\n" "Expected non empty string but got (${1})" "${2}"
     
 } >> "${MU_RPT}/${THIS_TEST_NAME}.rpt"
+##############################################################
+##
+## Name         :   assert_left_match_for_string
+## Author       :   Bradley Atkins
+## Description  :   String under test matches left of expected
+## Date         :   18/08/2015
+## Args         :   1 - <reference String>
+##                  2 - <String under test>
+##                  3 - [Err msg]
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+assert_left_match_for_string()
+{
+    mu_set_assertions ${THIS_TEST_NAME}
+    [[ "${1}" =~ "${2}".* ]] && return 0
+
+    mu_set_failures ${THIS_TEST_NAME}
+    printf "%s\n%s\n\n" "Expected left match of (${1}) but got (${2})" "${3}"
+    
+} >> "${MU_RPT}/${THIS_TEST_NAME}.rpt"
+
 

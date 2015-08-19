@@ -317,7 +317,7 @@ def Test-m_get_exp_file
     import m_fail_raise_error
     import common.funcs
    
-    #==============================3yy========
+    #======================================
     # Run the positive test
     #======================================
     M_NEWEXP="${MU_TMP}"
@@ -369,7 +369,7 @@ def Test-m_get_unique_tmp_file
 
     export M_TMP="${MU_TMP}"
     
-    #==============================3yy========
+    #======================================
     # Run the positive test
     #======================================
     m_get_unique_tmp_file Test-m_get_unique_tmp_file TMPFILE
@@ -423,7 +423,7 @@ def Test-m_get_tmp_file
 
     export M_TMP="${MU_TMP}"
     
-    #==============================3yy========
+    #======================================
     # Run the positive test
     #======================================
     m_get_tmp_file Test-m_get_tmp_file TMPFILE
@@ -463,6 +463,57 @@ def Test-m_get_tmp_file
     [[ -f "${MU_TMP}/common.funcs" ]] && rm -f "${MU_TMP}/common.funcs"
 end
 
+#======================================
+# Test for m_get_tmp_file
+#======================================
+def Test-m_get_tmp_dir
+    #======================================
+    # Requires
+    #======================================
+    require_file common.funcs
+    require_file m_fail_record_failure
+    require_file m_fail_raise_error
+    import m_fail_raise_error
+    import common.funcs
 
+    export M_TMP="${MU_TMP}"
+    
+    #======================================
+    # Run the positive test
+    #======================================
+    m_get_tmp_dir Test-m_get_tmp_dir DIR
+    assert_file_is_dir "${DIR}"
 
+    #======================================
+    # Negative Tests
+    #======================================
+    mu_find_file common.funcs FUT
+    sed 's/\(m_fail .*\)/\1 || return 1/g' "${FUT}" > "${MU_TMP}/common.funcs"
+    import common.funcs
+    import m_fail_record_failure
 
+    ## Rig test version of m_fail
+    mu_get_exp_file m_get_tmp_dir FAIL
+    export M_FAIL="${FAIL}"
+
+    ## Incorrect arg count
+    m_get_tmp_dir Test-m_get_tmp_dir && raise_failure "Failed to trap incorrect arg count"
+    ## Empty string $1
+    m_get_tmp_dir "" DIR  && raise_failure "Failed to trap empty arg[1]"
+    ## Invalid var name
+    m_get_tmp_dir Test-m_get_tmp_dir tmpdir && raise_failure "Failed to trap invalid arg[2]"
+    ## Failed to create dir
+    export M_TMP="/"
+    m_get_tmp_dir Test-m_get_tmp_dir DIR 2>/dev/null && raise_failure "Failed to trap Failure to create dir"
+
+    mu_find_file m_get_tmp_dir.exp EXP
+    #======================================
+    # All msgs from m_fail should be in FAIL
+    #======================================
+    assert_is_not_different <(head -n3 "${EXP}") <(head -n3 "${FAIL}")
+
+    assert_left_match_for_string < <(tail -n1 "${EXP}") \
+        "Call to m_fail with code (2) and msg (Error: Failed to create tmp directory"
+
+    [[ -f "${MU_TMP}/common.funcs" ]] && rm -f "${MU_TMP}/common.funcs"
+end
