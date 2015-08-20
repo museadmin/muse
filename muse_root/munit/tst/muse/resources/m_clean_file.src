@@ -1,0 +1,15 @@
+##############################################################
+##
+## Name         :   m_clean_file.src
+## Author       :   Bradley Atkins
+## Description  :   Test file for function m_clean_file
+## Date         :   20/08/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+    # Wibble
+    ##Wobble
+    Way ## A comment

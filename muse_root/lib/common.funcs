@@ -303,7 +303,8 @@ m_get_tmp_file()
 ## Author       :   Bradley Atkins
 ## Description  :   Create a directory under tmp
 ## Date         :   03/01/2015
-## Args         :   1 - VAR to return dir path
+## Args         :   1 - Name of caller
+##                  2 - VAR to return dir path
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
@@ -313,21 +314,22 @@ m_get_tmp_dir()
     #======================================
     # Validate
     #======================================
-    [[ $# -eq 1 ]] || m_fail 2 "Error: Usage. Arg count. 1 expected (${FUNCNAME})"
-    [[ ${1} =~ ^[[0-9A-Z_]+$ ]] || m_fail 2 "Error: Usage. Args[1]. MUSE variable name expected (${FUNCNAME})" 
+    [[ $# -eq 2 ]] || m_fail 2 "Error: Usage. Arg count. 1 expected (${FUNCNAME})"
+    [[ -n "${1}" ]] || m_fail 2 "Error: Usage. Arg[1]. Name expected (${FUNCNAME})" 
+    [[ ${2} =~ ^[[0-9A-Z_]+$ ]] || m_fail 2 "Error: Usage. Args[1]. MUSE variable name expected (${FUNCNAME})" 
 
     #======================================
     # Create a unique dir under /tmp
     #======================================
-    local TMPDIR=/tmp/muse_dir_${RANDOM}
+    local TMPDIR="${M_TMP}/${1}_${RANDOM}"
     while [[ -d "${TMPDIR}" ]] 
     do
-        TMPDIR=/tmp/muse_dir_${RANDOM}
+        TMPDIR="${M_TMP}/${1}_${RANDOM}"
     done
 
     mkdir "${TMPDIR}" || m_fail 2 "Error: Failed to create tmp directory (${TMPDIR}) (${FUNCNAME})" 
 
-    eval ${1}="${TMPDIR}"
+    eval ${2}="${TMPDIR}"
 
 }
 ##############################################################
@@ -349,12 +351,12 @@ m_clean_file()
 
     if [[ "${1}" == "${2}" ]] 
     then
-        local FILE
-        m_get_tmp_file ${FUNCNAME} FILE 
+        local TMPFILE
+        m_get_tmp_file ${FUNCNAME} TMPFILE 
         m_check_file -frw "${1}" || m_fail 3 "Error: File validation (${1}) 1 (${FUNCNAME})" 
-        sed 's/[#].*$//g' "${1}" | awk NF > "${FILE}"
+        sed 's/[#].*$//g' "${1}" | awk NF > "${TMPFILE}"
         for s in ${PIPESTATUS[@]}; do [[ $s -eq 0 ]] || m_fail 3 "Error:Pipe failed 1 (${FUNCNAME})" ; done 
-        cat "${FILE}" > "${1}"
+        mv "${TMPFILE}" "${1}"
     else
         m_check_file -fr "${1}" || m_fail 3 "Error: File validation (${1}) 2 (${FUNCNAME})" 
         m_check_file -fw "${2}" || m_fail 3 "Error: File validation (${2}) 3 (${FUNCNAME})" 

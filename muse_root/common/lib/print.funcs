@@ -203,9 +203,9 @@ m_print_run_footer()
     
     if m_read_state "MUSE_READY_TO_RUN"
     then
-        printf "${M_CLR_OK}%-${M_STATUS_OFFSET}s%s${C_CLEAR}\n" " Master Status" ": OK"
+        printf "${M_CLR_OK}%-${M_STATUS_OFFSET}s%s${C_CLEAR}\n" " Master Status" ": Running"
     else
-        printf "${M_CLR_NOT_OK}%-${M_STATUS_OFFSET}s%s${C_CLEAR}\n" " Master Status" ": NOT OK"
+        printf "${M_CLR_NOT_OK}%-${M_STATUS_OFFSET}s%s${C_CLEAR}\n" " Master Status" ": Not Ready to Run"
     fi
     
     if m_read_state "SLAVES_REGISTERED"

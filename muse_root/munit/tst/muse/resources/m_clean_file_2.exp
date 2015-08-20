@@ -1,0 +1,5 @@
+Call to m_fail with code (3) and msg (Error: Usage args (m_clean_file))
+Call to m_fail with code (3) and msg (Error: File validation (/var/tmp/munit/tmp/Test-m_clean_file.src) 1 (m_clean_file))
+Call to m_fail with code (3) and msg (Error: File validation (/var/tmp/munit/tmp/Test-m_clean_file.src) 1 (m_clean_file))
+Call to m_fail with code (3) and msg (Error: File validation (/var/tmp/munit/tmp/Test-m_clean_file.src) 2 (m_clean_file))
+Call to m_fail with code (3) and msg (Error: File validation (/var/tmp/munit/tmp/Test-m_clean_file.tmp) 3 (m_clean_file))

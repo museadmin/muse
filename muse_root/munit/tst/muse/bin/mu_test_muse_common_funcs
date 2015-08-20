@@ -517,3 +517,85 @@ def Test-m_get_tmp_dir
 
     [[ -f "${MU_TMP}/common.funcs" ]] && rm -f "${MU_TMP}/common.funcs"
 end
+
+def Test-m_clean_file
+    #======================================
+    # Requires
+    #======================================
+    require_file common.funcs
+    require_file m_clean_file.src
+    require_file m_fail_record_failure
+    require_file m_fail_raise_error
+    import m_fail_raise_error
+    import common.funcs
+
+    export M_TMP="${MU_TMP}"
+    
+    #======================================
+    # Run the positive tests
+    #======================================
+    ## Write new clean version of src file
+    mu_find_file m_clean_file.src SRC
+    mu_get_exp_file m_clean_file CLF
+    m_clean_file "${SRC}" "${CLF}"
+    mu_find_file m_clean_file.exp EXP
+    assert_is_not_different "${EXP}" "${CLF}"
+
+    ## Overwrite SRC file with clean version
+    TSRC="${MU_TMP}/Test-m_clean_file.src"
+    cp "${SRC}" "${TSRC}" || raise_error "Failed to copy src file (${SRC}) to dst dir (${TSRC})"
+    m_clean_file "${TSRC}" "${TSRC}"
+    assert_is_not_different "${EXP}" "${TSRC}"
+
+    #======================================
+    # Negative tests
+    #======================================
+    mu_find_file common.funcs FUT
+    sed 's/\(m_fail .*\)/\1 || return 1/g' "${FUT}" > "${MU_TMP}/common.funcs"
+    import common.funcs
+    import m_fail_record_failure
+
+    ## Rig test version of m_fail
+    mu_get_exp_file Test-m_clean_file FAIL
+    export M_FAIL="${FAIL}"
+
+    #======================================
+    # Src abd dst same file
+    #======================================
+    ## Arg count
+    cp "${SRC}" "${TSRC}" || raise_error "Failed to copy src file (${SRC}) to dst dir (${TSRC})"
+    m_clean_file "${TSRC}" && raise_failure "Failed to trap incorrect arg count"
+    ## Fail file perms check read
+    chmod -r "${TSRC}"
+    m_clean_file "${TSRC}" "${TSRC}" 2>/dev/null && raise_failure "Failed to trap perms invalid"
+    ## Fail file perms check write
+    chmod +r "${TSRC}"
+    chmod -w "${TSRC}"
+    m_clean_file "${TSRC}" "${TSRC}" 2>/dev/null && raise_failure "Failed to trap perms invalid"
+
+    #======================================
+    # Src and dst different
+    #======================================
+    ## Fail file perms check read
+    TMP="${MU_TMP}/Test-m_clean_file.tmp"
+    cp "${SRC}" "${TMP}" || raise_error "Failed to copy src file (${SRC}) to dst dir (${TSRC})"
+    chmod -r "${TSRC}"
+    chmod +w "${TMP}"
+    m_clean_file "${TSRC}" "${TMP}" 2>/dev/null && raise_failure "Failed to trap perms invalid"
+    ## Fail file perms check write
+    chmod +r "${TSRC}"
+    chmod -w "${TMP}"
+    m_clean_file "${TSRC}" "${TMP}" 2>/dev/null && raise_failure "Failed to trap perms invalid"
+
+    #======================================
+    # Confirm we have all the correct error 
+    # msgs
+    #======================================
+    mu_find_file m_clean_file_2.exp EXP2
+    assert_is_not_different "${EXP2}" "${FAIL}"
+
+end
+
+
+
+
