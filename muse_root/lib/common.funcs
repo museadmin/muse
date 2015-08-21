@@ -407,7 +407,7 @@ m_new_outbound_msg()
     [[ $# -eq 12 ]] || m_fail 2 "Error: Args count. 12 Expected (${FUNCNAME})"
 	
 	[[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Usage args [1]. Integer expected. (${FUNCNAME})"
-	[[ -n ${2} ]] || m_fail 2 "Error: Usage args [2] Time stamp expected. (${FUNCNAME})"
+	[[ ${2} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Usage args [2] Time stamp expected. (${FUNCNAME})"
 	[[ ${3} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Usage args [3] integer expected. (${FUNCNAME})"
 	[[ (${4} -eq 1) || (${4} -eq 2) || (${4} -eq 3) ]] || m_fail 2 "Error: Usage args [4] Priority out of range (${1}). 1 - 3 expected.(${FUNCNAME})"
 	[[ -n ${5} ]] || m_fail 2 "Error: Usage args [5] Sender expected. (${FUNCNAME})"
