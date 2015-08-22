@@ -452,14 +452,14 @@ m_new_outbound_msg()
 ##############################################################
 m_update_file()
 {
-    [[ $# -eq 4 ]] || m_fail 2 "Error: (${FUNCNAME})"
+    [[ $# -eq 4 ]] || m_fail 2 "Error: Usage. Arg Count. 4 expected (${FUNCNAME})"
     [[ -w "${1}" ]] || m_fail 2 "Error: Usage. Arg[1]. Writable file expected (${FUNCNAME})" 
     [[ -r "${1}" ]] || m_fail 2 "Error: Usage. Arg[1]. Readable file expected (${FUNCNAME})" 
     [[ -n ${2} ]] || m_fail 2 "Error: Usage. Arg[2]. Pattern or line no expected (${FUNCNAME})" 
     [[ ${3} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Usage. Arg[3]. Integer expected (${FUNCNAME})" 
     [[ -n ${4} ]] || m_fail 2 "Error: Usage. Arg[4]. Replacement Line expected (${FUNCNAME})" 
     
-    local TMPFILE LN MATCHES
+    local TMPFILE= LN= MATCHES=
     m_get_tmp_file ${FUNCNAME} TMPFILE
 
     #======================================
@@ -499,4 +499,4 @@ m_update_file()
         ;;
     esac
 
-}
+} 
