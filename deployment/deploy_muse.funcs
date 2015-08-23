@@ -1,0 +1,170 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   deploy_muse.funcs
+## Author       :   Bradley Atkins
+## Description  :   Support functions for deployer
+## Date         :   23/08/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+##############################################################
+##
+## Name         :   get_hosts_for_cluster
+## Author       :   Bradley Atkins
+## Description  :   Return a list of hostnames from muse.hosts
+##                  for a given cluster
+## Date         :   23/08/2015
+## Args         :   1 - cluster name or pattern
+##                  2 - FQNAME | SNAME
+##                  3 - Return Variable for list
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+get_hosts_for_cluster()
+{
+    #======================================
+    # Validate
+    #======================================
+    [[ -d "${MUSE_ROOT}" ]] || die "MUSE_ROOT not set (${FUNCNAME})" "ERROR"
+    [[ $# -eq 3 ]] || die "Usage. Arg count. 3 expected"
+    [[ -n "${1}" ]] || die "Usage. Arg[1]. Cluster name expected (${FUNCNAME})"
+    [[ ("${2}" == "FQNAME") || ("${2}" == "${SNAME}") ]] || die "Usage arg[2]. FQNAME or SNAME expected (${FUNCNAME})"
+    [[ -n "${3}" ]] || die "Usage. Arg[2]. Variable name expected (${FUNCNAME})"
+
+    #======================================
+    # Find the hosts file for MUSE
+    #======================================
+    local MHOSTS="${MUSE_ROOT}/user/muse.hosts"
+    [[ -r "${MHOSTS}" ]] || die "Failed to find readable muse.hosts file below (${MUSE_ROOT}) (${FUNCNAME})"
+    
+    #======================================
+    # Need MUSE defaults to read hosts 
+    #======================================
+    local DEFS="${MUSE_ROOT}/user/defaults.env"
+    [[ -r "${DEFS}" ]] || die "Failed to find readable user defaults (${DEFS})"
+    source "${DEFS}" || die "Failed to source (${DEFS})"
+    
+    #======================================
+    # Pull out all of the names for cluster
+    #======================================
+    [[ (-n ${HOSTS_DELIMITER}) && (-n ${COLUMN_ORDER}) ]] || die 1 "Hosts env vars not set (${FUNCNAME})"
+
+    local OLDIFS="${IFS}" STR=""
+    IFS="${HOSTS_DELIMITER}"
+
+    while eval read ${COLUMN_ORDER}
+    do
+        if [[ "${CLUSTER}" == *"${1}"* ]]
+        then
+            if [[ "${2}" == "FQNAME" ]]
+            then
+                STR="${STR} ${FQNAME}"
+            else
+                STR="${STR} ${SNAME}"
+            fi
+        fi
+    done < <(sed 's/[#].*$//g' "${MHOSTS}" | awk NF)
+   
+    IFS="${OLDIFS}"
+
+    eval ${3}='"${STR}"'
+}
+
+##############################################################
+##
+## Name         :   get_clusters_from_hosts
+## Author       :   Bradley Atkins
+## Description  :   Return a list of cluster names from muse.hosts
+## Date         :   23/08/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+get_clusters_from_hosts()
+{
+    #======================================
+    # Validate
+    #======================================
+    [[ -d "${MUSE_ROOT}" ]] || die "MUSE_ROOT not set (${FUNCNAME})" "ERROR"
+    [[ $# -eq 1 ]] || die "Usage. Arg count. 1 expected"
+    [[ -n "${1}" ]] || die "Usage. Arg[1]. Variable name expected (${FUNCNAME})"
+
+    #======================================
+    # Find the hosts file for MUSE
+    #======================================
+    local MHOSTS="${MUSE_ROOT}/user/muse.hosts"
+    [[ -r "${MHOSTS}" ]] || die "Failed to find readable muse.hosts file below (${MUSE_ROOT}) (${FUNCNAME})"
+    
+    #======================================
+    # Need MUSE defaults to read hosts 
+    #======================================
+    local DEFS="${MUSE_ROOT}/user/defaults.env"
+    [[ -r "${DEFS}" ]] || die "Failed to find readable user defaults (${DEFS})"
+    source "${DEFS}" || die "Failed to source (${DEFS})"
+    
+    #======================================
+    # Pull out all of the names for cluster
+    #======================================
+    [[ (-n ${HOSTS_DELIMITER}) && (-n ${COLUMN_ORDER}) ]] || die 1 "Hosts env vars not set (${FUNCNAME})"
+
+    local OLDIFS="${IFS}" STR= TSTR=
+    IFS="${HOSTS_DELIMITER}"
+
+    while eval read ${COLUMN_ORDER}
+    do
+        STR="${STR} ${CLUSTER}"
+    done < <(sed 's/[#].*$//g' "${MHOSTS}" | awk NF)
+   
+    IFS="${OLDIFS}"
+
+    #======================================
+    # Return a sorted unique list 
+    #======================================
+    TSTR=$(echo "${STR}" | tr " " "\n" | sort -u | tr "\n" " ")
+    
+    eval ${1}='"${TSTR}"'
+}
+##############################################################
+##
+## Name         :   get_menu_item
+## Author       :   Bradley Atkins
+## Description  :   Display a menu and return the selction
+## Date         :   23/08/2015
+## Args         :   1 - Prompt string
+##                  2 - Return var
+##                  3 - List of menu items
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+get_menu_item()
+{
+    #======================================
+    # Validate
+    #======================================
+    [[ $# -ge 3 ]] || die "Usage. Arg count. 3 or greater expected (${FUNCNAME})"
+    [[ -n "${1}" ]] || die "Usage. Arg[1]. Cluster name expected (${FUNCNAME})"
+    [[ -n "${2}" ]] || die "Usage. Arg[2]. Variable name expected (${FUNCNAME})"
+
+    #======================================
+    # Create the menu
+    #======================================
+    PS3="${1}: "
+    local ARGS=("$@") 
+    OPTIONS=(${ARGS[@]:2})
+    select OPT in "${OPTIONS[@]}"
+    do
+        ## Choice out of range
+        [[ "${REPLY}" -gt "${#OPTIONS[@]}" ]] && continue
+        break
+    done
+    #======================================
+    # Return the value to caller
+    #======================================
+    eval ${2}='"${OPT}"'
+}

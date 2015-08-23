@@ -1,0 +1,158 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   deploy_muse
+## Author       :   Bradley Atkins
+## Description  :   Deploy MUSE to the target clusters
+## Date         :   23/08/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+##############################################################
+##
+## Name         :   die
+## Author       :   Bradley Atkins
+## Description  :   Error Handler
+## Date         :   23/08/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+die()
+{
+    log_msg "${1}" "Error"
+    exit 1
+}
+##############################################################
+##
+## Name         :   log_msg
+## Author       :   Bradley Atkins
+## Description  :   Write a msg to the log
+## Date         :   23/08/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+log_msg()
+{
+    if [[ -n "${DEP_LOG}" ]]
+    then
+        echo "$(date):${2}: ${1}" >> "${DEP_LOG}"
+    else
+        echo "$(date):${2}: ${1}"
+    fi
+}
+##############################################################
+##
+## Name         :   cleanup
+## Author       :   Bradley Atkins
+## Description  :   Ensure we clean up to avoid hanging ssh 
+##                  cnxns when called from Jenkins
+## Date         :   23/08/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+cleanup()
+{
+    #======================================
+    # Explicitely close any open descriptors
+    # in case we are being called via ssh
+    #======================================
+    if [[ -d /proc ]]
+    then
+        for fd in $(ls /proc/$$/fd); do
+            case "$fd" in
+                0|1|2|255)
+                ;;
+                *)
+                    eval "exec $fd>&-"
+                ;;
+            esac
+        done
+    fi
+}
+trap cleanup SIGINT SIGTERM SIGHUP EXIT
+
+#======================================
+# Bootstrap
+#======================================
+export MU_START_DIR=$(pwd)
+export SELF_ROOT="$(cd $(dirname "$0");pwd)"
+cd "${SELF_ROOT}" || die "Failed to cd to (${SELF_ROOT})"
+
+DEFAULTS="${SELF_ROOT}/defaults.env"
+[[ -r "${DEFAULTS}" ]] || die "Default environment (${DEFAULTS}) not found"
+source "${DEFAULTS}" || die "Failed to source default environment (${DEFAULTS})"
+
+DFUNCS="${SELF_ROOT}/deploy_muse.funcs"
+[[ -r "${DFUNCS}" ]] || die "Failed to find readable library (${DFUNCS})"
+source "${DFUNCS}" || die "Failed to source library (${DFUNCS})"
+
+
+
+#======================================
+# Start
+#======================================
+if [[ $# -gt 0 ]]
+then
+    #======================================
+    # User has passed a cluster name
+    #======================================
+    get_hosts_for_cluster "${1}" "FQNAME" DHOSTS
+else
+    #======================================
+    # No arg so use menu
+    #======================================
+    get_clusters_from_hosts CLUSTERS
+    get_menu_item "Select a cluster to deploy MUSE to" ITEM "All" "${CLUSTERS}" "Quit"
+
+    case ${ITEM} in 
+        "Quit")
+                echo "Quitting"
+                exit 0
+            ;;
+        "All")
+                #======================================
+                # Assumes all clusters contain unique hosts
+                #======================================
+                for cluster in ${CLUSTERS}
+                do
+                    get_hosts_for_cluster ${cluster} "FQNAME" THOSTS
+                    DHOSTS="${DHOSTS} ${THOSTS}"
+                done
+            ;;
+        *)
+                #======================================
+                # Get host names for specific cluster
+                #======================================
+                get_hosts_for_cluster "${ITEM}" "FQNAME" DHOSTS
+            ;;
+    esac
+
+    #======================================
+    # Have our details so deploy
+    #======================================
+    case "${SSH_TYPE}" in
+        1)
+            #======================================
+            # FWL is used as SSH Proxy
+            #======================================
+
+
+            ;;
+        2)
+            ;;
+        3)
+            ;;
+    esac
+
+
+fi
+
+
