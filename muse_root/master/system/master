@@ -248,6 +248,7 @@ set -a
     M_MAPPER="${M_ROOT}/utils/muse_mapper.funcs"
 set +a
 
+:>"${M_MUSE_MAP}"
 [[ -n "${M_DEV_ROOT}" ]] && find "${M_DEV_ROOT}" -type f > "${M_MUSE_MAP}"
 find "${M_ROOT}" -type f >> "${M_MUSE_MAP}"
 

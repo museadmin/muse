@@ -25,6 +25,7 @@
 die()
 {
     log_msg "${1}" "Error"
+    echo "$(date):ERROR:${1}"
     exit 1
 }
 ##############################################################
@@ -110,9 +111,9 @@ else
     # No arg so use menu
     #======================================
     get_clusters_from_hosts CLUSTERS
-    get_menu_item "Select a cluster to deploy MUSE to" ITEM "All" "${CLUSTERS}" "Quit"
+    get_menu_item "Select a cluster to deploy MUSE to" THIS_CLUSTER "All" "${CLUSTERS}" "Quit"
 
-    case ${ITEM} in 
+    case ${THIS_CLUSTER} in 
         "Quit")
                 echo "Quitting"
                 exit 0
@@ -131,28 +132,41 @@ else
                 #======================================
                 # Get host names for specific cluster
                 #======================================
-                get_hosts_for_cluster "${ITEM}" "FQNAME" DHOSTS
+                get_hosts_for_cluster "${THIS_CLUSTER}" "FQNAME" DHOSTS
             ;;
     esac
 
     #======================================
-    # Have our details so deploy
+    # Create an ssh_config file for scp
     #======================================
-    case "${SSH_TYPE}" in
-        1)
-            #======================================
-            # FWL is used as SSH Proxy
-            #======================================
+    create_ssh_cfg "${SELF_ROOT}/${SSH_DEP_CFG}"  "${THIS_CLUSTER}" "${SSH_DEP_USR}" "${DHOSTS}"
+    create_ssh_cfg "${SELF_ROOT}/${SSH_INS_CFG}"  "${THIS_CLUSTER}" "${SSH_INS_USR}" "${DHOSTS}"
 
+    #======================================
+    # Create the tarball
+    #======================================
+    [[ -f "${SELF_ROOT}/${MUSE_TAR}" ]] && rm -f "${SELF_ROOT}/${MUSE_TAR}"
+    cd .. >/dev/null
+    tar zcf "${SELF_ROOT}/${MUSE_TAR}" muse_root >/dev/null || die "tar failed"
+    cd - >/dev/null
 
-            ;;
-        2)
-            ;;
-        3)
-            ;;
-    esac
+    #======================================
+    # SCP the tarball to the cluster
+    #======================================
+    for THOST in ${DHOSTS}
+    do
+        echo "copying MUSE to - ${THOST}"
+        scp -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_DEP_CFG}" "${SELF_ROOT}/${MUSE_TAR}" "${THOST}:." >/dev/null 2>&1 || die "SCP failed for host ${THOST}"
+        scp -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_DEP_CFG}" "${SELF_ROOT}/install_muse" "${THOST}:." >/dev/null 2>&1 || die "SCP failed for host ${THOST}"
+        ssh -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_INS_CFG}" "${THOST}" "cd ~${SSH_DEP_USR};./install_muse" >/dev/null 2>&1 || die "Install failed for host ${THOST}"
+    done
 
-
+    #======================================
+    # Cleanup
+    #======================================
+    [[ -f "${SELF_ROOT}/${SSH_DEP_CFG}" ]] && rm -f "${SELF_ROOT}/${SSH_DEP_CFG}"
+    [[ -f "${SELF_ROOT}/${SSH_INS_CFG}" ]] && rm -f "${SELF_ROOT}/${SSH_INS_CFG}"
+    [[ -f "${SELF_ROOT}/${MUSE_TAR}" ]] && rm -f "${SELF_ROOT}/${MUSE_TAR}"
 fi
 
 

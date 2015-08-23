@@ -58,6 +58,11 @@ get_hosts_for_cluster()
 
     while eval read ${COLUMN_ORDER}
     do
+        if ! ${DEPLOY_MUSE_TO_FWL}
+        then
+            [[ "${TYPE}" == "FWL" ]] && continue
+        fi
+
         if [[ "${CLUSTER}" == *"${1}"* ]]
         then
             if [[ "${2}" == "FQNAME" ]]
@@ -74,6 +79,75 @@ get_hosts_for_cluster()
     eval ${3}='"${STR}"'
 }
 
+##############################################################
+##
+## Name         :   get_host_from_cluster
+## Author       :   Bradley Atkins
+## Description  :   Return a hostname from muse.hosts from a 
+##                  specific cluster for a specifc type
+## Date         :   23/08/2015
+## Args         :   1 - cluster name or pattern
+##                  2 - FQNAME | SNAME
+##                  3 - TYPE
+##                  4 - Return Variable for host
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+get_host_from_cluster()
+{
+    #======================================
+    # Validate
+    #======================================
+    [[ -d "${MUSE_ROOT}" ]] || die "MUSE_ROOT not set (${FUNCNAME})" "ERROR"
+    [[ $# -eq 4 ]] || die "Usage. Arg count. 3 expected"
+    [[ -n "${1}" ]] || die "Usage. Arg[1]. Cluster name expected (${FUNCNAME})"
+    [[ ("${2}" == "FQNAME") || ("${2}" == "${SNAME}") ]] || die "Usage arg[2]. FQNAME or SNAME expected (${FUNCNAME})"
+    [[ -n "${3}" ]] || die "Usage. Arg[3]. Variable name expected (${FUNCNAME})"
+    [[ -n "${4}" ]] || die "Usage. Arg[4]. Variable name expected (${FUNCNAME})"
+
+    #======================================
+    # Find the hosts file for MUSE
+    #======================================
+    local MHOSTS="${MUSE_ROOT}/user/muse.hosts"
+    [[ -r "${MHOSTS}" ]] || die "Failed to find readable muse.hosts file below (${MUSE_ROOT}) (${FUNCNAME})"
+    
+    #======================================
+    # Need MUSE defaults to read hosts 
+    #======================================
+    local DEFS="${MUSE_ROOT}/user/defaults.env"
+    [[ -r "${DEFS}" ]] || die "Failed to find readable user defaults (${DEFS})"
+    source "${DEFS}" || die "Failed to source (${DEFS})"
+    
+    #======================================
+    # Pull out all of the names for cluster
+    #======================================
+    [[ (-n ${HOSTS_DELIMITER}) && (-n ${COLUMN_ORDER}) ]] || die 1 "Hosts env vars not set (${FUNCNAME})"
+
+    local OLDIFS="${IFS}" STR=""
+    IFS="${HOSTS_DELIMITER}"
+
+    while eval read ${COLUMN_ORDER}
+    do
+        if [[ "${CLUSTER}" == *"${1}"* ]]
+        then
+            if [[ "${TYPE}" == "${3}" ]]
+            then
+                if [[ "${2}" == "FQNAME" ]]
+                then
+                    STR="${STR} ${FQNAME}"
+                else
+                    STR="${STR} ${SNAME}"
+                fi
+                break
+            fi
+        fi
+    done < <(sed 's/[#].*$//g' "${MHOSTS}" | awk NF)
+   
+    IFS="${OLDIFS}"
+
+    eval ${4}='$(echo "${STR}" | xargs)'
+}
 ##############################################################
 ##
 ## Name         :   get_clusters_from_hosts
@@ -167,4 +241,67 @@ get_menu_item()
     # Return the value to caller
     #======================================
     eval ${2}='"${OPT}"'
+}
+##############################################################
+##
+## Name         :   create_ssh_cfg
+## Author       :   Bradley Atkins
+## Description  :   Create an ssh config file for cluster hosts
+## Date         :   23/08/2015
+## Args         :   1 - Filename
+##                  2 - Cluster name
+##                  3 - User
+##                  * - List of hosts
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+create_ssh_cfg()
+{
+    #======================================
+    # Validate
+    #======================================
+    [[ -n "${1}" ]] || die "Usage. Arg[1]. Writable file expected (${FUNCNAME})"
+    [[ -n "${2}" ]] || die "Usage. Arg[2]. Cluster name expected (${FUNCNAME})"
+    [[ -n "${3}" ]] || die "Usage. Arg[3]. Cluster name expected (${FUNCNAME})"
+
+    local ARGS=("$@") THIS_FWL= THOST=
+    local HOST_NAMES=(${ARGS[@]:3})
+
+    :> "${1}" || die "Failed to zero CFG file (${1}) (${FUNCNAME})"
+
+    case "${SSH_TYPE}" in
+        1)
+            #======================================
+            # FWL is used as SSH Proxy
+            #======================================
+            local THIS_FWL=
+            get_host_from_cluster "${2}" FQNAME "FWL" THIS_FWL
+
+            for THOST in ${HOST_NAMES[@]}
+            do
+                printf "%s\n" "Host : ${THOST}" >> "${1}"
+                printf "%s\n" "Hostname ${THOST}" >> "${1}"
+                printf "%s\n" "User ${3}" >> "${1}"
+                printf "%s\n" "ForwardAgent yes" >> "${1}"
+                printf "%s\n" "ProxyCommand ssh ${3}@${THIS_FWL} nc %h %p" >> "${1}"
+                printf "%s\n\n" "IdentityFile ${SSH_DEP_KEY}" >> "${1}"
+            done
+            
+            printf "%s\n" "Host *" >> "${1}"
+            printf "%s\n" "SendEnv LANG LC_*" >> "${1}"
+            printf "%s\n" "HashKnownHosts yes" >> "${1}"
+            printf "%s\n" "GSSAPIAuthentication yes" >> "${1}"
+            printf "%s\n" "GSSAPIDelegateCredentials no" >> "${1}"
+            printf "%s\n" "ServerAliveInterval ${SSH_INTVL}" >> "${1}"
+            printf "%s\n" "ForwardAgent ${SSH_FWD}" >> "${1}"
+            printf "%s\n" "StrictHostKeyChecking ${SSH_KEY_CHK}" >> "${1}"
+            printf "%s\n" "UserKnownHostsFile=${SSH_KNOWN_HSTS}" >> "${1}"
+            ;;
+        2)
+            ;;
+        3)
+            ;;
+    esac
+
 }
