@@ -305,3 +305,62 @@ create_ssh_cfg()
     esac
 
 }
+##############################################################
+##
+## Name         :   deploy_muse_to_cluster
+## Author       :   Bradley Atkins
+## Description  :   Deploy MUSE to a named cluster
+## Date         :   24/08/2015
+## Args         :   1 - Cluster name or pattern
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+deploy_muse_to_cluster()
+{
+    [[ $# -eq 1 ]] || die "Usage. Arg count. 1 expected (${FUNCNAME})"
+    [[ -n ${1} ]] || die "Usage. Arg[1]. Cluster name expected (${FUNCNAME})"
+    local THIS_CLUSTER="${1}"
+
+    #======================================
+    # Set get_cluster to echo name?
+    #======================================
+    if "${PRIME_GET_CLUSTER}"
+    then
+        [[ -r "${GET_CLUSTER}" ]] || die "PRIME_GET_CLUSTER is true but path to get_cluster indefined"
+        sed 's/_CLUSTER_NAME_/'"${THIS_CLUSTER}"'/g' "${GET_CLUSTER}.template" > "${GET_CLUSTER}"
+    fi
+
+    #======================================
+    # Create an ssh_config file for scp
+    #======================================
+    create_ssh_cfg "${SELF_ROOT}/${SSH_DEP_CFG}"  "${THIS_CLUSTER}" "${SSH_DEP_USR}" "${DHOSTS}"
+    create_ssh_cfg "${SELF_ROOT}/${SSH_INS_CFG}"  "${THIS_CLUSTER}" "${SSH_INS_USR}" "${DHOSTS}"
+
+    #======================================
+    # Create the tarball
+    #======================================
+    [[ -f "${SELF_ROOT}/${MUSE_TAR}" ]] && rm -f "${SELF_ROOT}/${MUSE_TAR}"
+    cd .. >/dev/null
+    tar zcf "${SELF_ROOT}/${MUSE_TAR}" muse_root >/dev/null || die "tar failed"
+    cd - >/dev/null
+
+    #======================================
+    # SCP the tarball to the cluster
+    #======================================
+    for THOST in ${DHOSTS}
+    do
+        echo "copying MUSE to - ${THOST}"
+        scp -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_DEP_CFG}" "${SELF_ROOT}/${MUSE_TAR}" "${THOST}:." >/dev/null 2>&1 || die "SCP failed for host ${THOST}"
+        scp -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_DEP_CFG}" "${SELF_ROOT}/install_muse" "${THOST}:." >/dev/null 2>&1 || die "SCP failed for host ${THOST}"
+        ssh -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_INS_CFG}" "${THOST}" "cd ~${SSH_DEP_USR};./install_muse" >/dev/null 2>&1 || die "Install failed for host ${THOST}"
+    done
+
+    #======================================
+    # Cleanup
+    #======================================
+    [[ -f "${SELF_ROOT}/${SSH_DEP_CFG}" ]] && rm -f "${SELF_ROOT}/${SSH_DEP_CFG}"
+    [[ -f "${SELF_ROOT}/${SSH_INS_CFG}" ]] && rm -f "${SELF_ROOT}/${SSH_INS_CFG}"
+    [[ -f "${SELF_ROOT}/${MUSE_TAR}" ]] && rm -f "${SELF_ROOT}/${MUSE_TAR}"
+
+}
