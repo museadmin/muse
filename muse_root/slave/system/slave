@@ -63,6 +63,23 @@ cleanup()
         echo "EXIT" > "${M_CONTROL}/rx.ctl" 2>/dev/null
         echo "EXIT" > "${M_CONTROL}/tx.ctl" 2>/dev/null
     fi
+    
+    #======================================
+    # Explicitely close any open descriptors
+    # in case we are being called via ssh
+    #======================================
+    if [[ -d /proc ]]
+    then
+        for fd in $(ls /proc/$$/fd); do
+            case "$fd" in
+                0|1|2|255)
+                ;;
+                *)
+                    eval "exec $fd>&-"
+                ;;
+            esac
+        done
+    fi
 } 
 
 trap cleanup SIGINT SIGTERM SIGHUP EXIT

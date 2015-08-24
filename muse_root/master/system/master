@@ -65,18 +65,18 @@ cleanup()
     # Explicitely close any open descriptors
     # in case we are being called via ssh
     #======================================
-    for fd in $(ls /proc/$$/fd); do
-        case "$fd" in
-            0|1|2|255)
-            ;;
-            *)
-                eval "exec $fd>&-"
-            ;;
-        esac
-    done
-
-    ## TODO Remove this after local dev. For now kills slave on error in master
-    echo stop > /var/tmp/muse/m_system/muse.ctL
+    if [[ -d /proc ]]
+    then
+        for fd in $(ls /proc/$$/fd); do
+            case "$fd" in
+                0|1|2|255)
+                ;;
+                *)
+                    eval "exec $fd>&-"
+                ;;
+            esac
+        done
+    fi
 }
 
 trap cleanup SIGINT SIGTERM SIGHUP EXIT
@@ -103,6 +103,7 @@ usage()
     printf "\t%s\n" "${0##*/} -cf|--copyf <name>        :Copy file to dev directory"
     printf "\t%s\n" "${0##*/} -cp|--copyright           :Show copyright notice"
     printf "\t%s\n" "${0##*/} -d|--delete               :Delete the current user tag. (Resets to \"default\")"
+    printf "\t%s\n" "${0##*/} -df                       :Check for duplicate function names in all deployed libraries"
     printf "\t%s\n" "${0##*/} -e|--explain <job>        :Display control data for the plugin or suite file" 
     printf "\t%s\n" "${0##*/} -fc|--findc [tag]         :Find [tagged] control files"
     printf "\t%s\n" "${0##*/} -fe|--finde [tag]         :Find [tagged] expected files"
@@ -232,7 +233,7 @@ cd /tmp || die_local "cd to /tmp failed"
 set -a
     MUSEDEV="musedev"
     MUSEADMIN="museadmin"
-    if egrep "${MUSEDEV}|${MUSEADMIN}" < <(groups ${USER} 2>/dev/null) >/dev/null
+    if getent group | egrep "musedev|museadmin" | grep $(whoami) >/dev/null
     then
         M_DEV_ROOT=~/.muse_dev
     else

@@ -881,7 +881,7 @@ m_validate_cmd_line()
                 ;;
             -lf)
                 shift
-                {
+             #   {
                 while read F
                 do
                     STR=" No functions available in (${F##*/})"
@@ -909,11 +909,38 @@ m_validate_cmd_line()
                     sed 's/^[ \t]*/ /g' "${TMPFILE}"
 
                 done < <(grep ".funcs" "${M_MUSE_MAP}" | grep -v deprecated | grep -v .swp)
-            } 2>/tmp/debug    
+            #} 2>/tmp/debug    
                 if [[ ${FLAG} != "true" ]]
                 then
                     printf "%s\n" "${C_BREAK}"
                     printf "%s\n" "No matching functions found"
+                    printf "%s\n" "${C_BREAK}"
+                fi
+
+                m_remove_run_files
+                M_ACTION=NORUN
+                return 0
+                ;;
+            -df)
+
+                #======================================
+                # Check for duplicate function names
+                #======================================
+                :>"${TMPFILE}"
+                while read F
+                do
+                    sed -n '/## Name[\t ]*:[\t ]*m_/p' "${F}" | sed 's/\(## Name[\t ]*:\)//g' >> "${TMPFILE}"
+                done < <(grep ".funcs" "${M_MUSE_MAP}" | grep -v deprecated | grep -v .swp)
+
+                if ! diff  <(sort "${TMPFILE}" | sed -r '/m_fail|m_init/d')  <(sort -u "${TMPFILE}" | sed -r '/m_fail|m_init/d') >/dev/null
+                then
+                    printf "%s\n" "${C_BREAK}"
+                    printf "%s\n" "Duplicate function names found"
+                    printf "%s\n" "${C_BREAK}"
+                    diff  <(sort "${TMPFILE}" | sed -r '/m_fail|m_init/d')  <(sort -u "${TMPFILE}" | sed -r '/m_fail|m_init/d')
+                else 
+                    printf "%s\n" "${C_BREAK}"
+                    printf "%s\n" "No duplicate function names found"
                     printf "%s\n" "${C_BREAK}"
                 fi
 
@@ -1190,7 +1217,7 @@ m_validate_cmd_line()
                 ;;
         esac
     fi
-
+exit
     #======================================
     # Echo  the command line into suite 1
     # $@ i= cmd line -opts
@@ -1733,94 +1760,6 @@ m_remove_run_files()
 {
     [[ -d "${M_RUN_DIR}" ]] && rm -rf "${M_RUN_DIR}/"
 }
-##############################################################
-##
-## Name         :   m_get_exp_file
-## Author       :   Bradley Atkins
-## Description  :   Create an expected results file with a unique name.
-## Date         :   28/08/2012
-## Args         :   1 - Name of function or script requiring file
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##############################################################
-m_get_exp_file()
-{
-    [[ $# -eq 1 ]] || exit 1
-
-    local FILE="${M_NEWEXP}/${1}_${RANDOM}.exp"
-
-    :>"${FILE}" || exit 2
-
-    echo "${FILE}"
-}
-##############################################################
-##
-## Name         :   m_get_file_data
-## Author       :   Bradley Atkins
-## Description  :   Clean the output of the find | ls command
-##                  Cut out the time stamps etc just leaving
-##                  perms owner grp size and path. First two params
-##                  are optional. Complexity arises from requirement to 
-##                  handle files and dirs with escape sequences and spaces
-##                  in the names.
-## Date         :   19/09/2012
-## Args         :   1 - -s Optional Sort by file or directory name
-##                  2 - -d Optional find of directories (Defaults to files)
-##                  3 - -min Optional min depth for find
-##                  4 - -max Optional max depth for find
-##                  5 - Top level directory for find
-## Status       :   Reviewed    [n]
-##                  Tested      [n]
-##                  Released    [n]
-##############################################################
-m_get_file_data()
-{
-    [[ $# > 7 ]] && m_fail 1 "Error: Usage args (${FUNCNAME})"  
-
-    local SORT="cat" OPT="-l" TYPE="f" MIN_D= MAX_D= 
-
-    while [[ $# > 1 ]]
-    do
-        case ${1} in
-            -s) SORT="sort -k5";;
-            -d) TYPE="d";OPT="-ld";;
-            -min)
-                shift 
-                [[ ${1} =~ ^[[:digit:]]+$ ]] || 
-                    m_fail 1 "Error: Min depth param (${FUNCNAME})" 
-                MIN_D="-mindepth ${1}"
-                ;;
-            -max)
-                shift 
-                [[ ${1} =~ ^[[:digit:]]+$ ]] || 
-                    m_fail 1 "Error: Max depth param (${FUNCNAME})"
-                MAX_D="-maxdepth ${1}"
-                ;;
-            *) m_fail 1 "Error: Unrecognised option (${1}) (${FUNCNAME})";;
-        esac
-        shift
-    done
-
-    [[ -d "${1}" ]] || m_fail 1 "Error: Not a directory (${1}) (${FUNCNAME})" 
-
-    awk '{
-        lo=""
-        for (i = 1; i <= NF; i++){
-            if (i <= 5)
-                if (i != 2)
-                    lo = lo" "$i
-
-            if ($i ~ /\//){
-                sub(/ */, " ", $0)          
-                printf lo" "$0"\n"
-                next
-            }
-            $i = ""
-        }
-    }' <(find "${1}" ${MIN_D} ${MAX_D} -type ${TYPE} | sed 's#\\#\\\\#g' | xargs -i ls ${OPT} "{}") | ${SORT}
-}
-
 
 #======================================
 # Slave Handling
