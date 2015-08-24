@@ -1,0 +1,32 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   m_ciscat_centos6_1_1_9
+## Author       :   Bradley Atkins
+## Description  :   1.1.9 Create Separate Partition for /home (Scored)
+## Date         :   23/09/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## M_JOB_HOST
+## M_GREP_PATTERN "^[[:alnum:]]+: |^/.*: |error|info|warning"
+##
+##############################################################
+SCRIPT_NAME=m_ciscat_centos6_1_1_9
+
+CISCAT_REPORT="${M_CISCAT_REPORT}"
+RESULT="Passed|1.1.9|Create Separate Partition for /home|1"
+
+m_print_marker ${C_EXCLUSION_MARKER} 
+
+if ! grep /home /etc/fstab
+then
+    RESULT="Failed|1.1.9|Create Separate Partition for /home|1"
+fi
+
+echo "${RESULT}" >> "${CISCAT_REPORT}"
+
+m_print_marker ${C_EXCLUSION_MARKER}
+

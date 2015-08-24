@@ -1,0 +1,40 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   m_ciscat_centos6_1_1_3
+## Author       :   Bradley Atkins
+## Description  :   1.1.3 Set nosuid option for /tmp Partition (Scored)
+## Date         :   23/09/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## M_JOB_HOST
+## M_GREP_PATTERN "^[[:alnum:]]+: |^/.*: |error|info|warning"
+##
+##############################################################
+SCRIPT_NAME=m_ciscat_centos6_1_1_3
+
+CISCAT_REPORT="${M_CISCAT_REPORT}"
+RESULT="Passed|1.1.3|Set nosuid option for /tmp Partition|1"
+
+m_print_marker ${C_EXCLUSION_MARKER} 
+
+if ! grep /tmp /etc/fstab | grep nosuid
+then
+    RESULT="Failed|1.1.3|Set nosuid option for /tmp Partition|1"
+fi
+
+if [[ -z $(mount | grep /tmp | grep nosuid) ]]
+then
+    RESULT="Failed|1.1.3|Set nosuid option for /tmp Partition|1"
+    echo "Failed"
+else
+    echo "Passed"
+fi
+
+m_print_marker ${C_EXCLUSION_MARKER}
+
+echo "${RESULT}" >> "${CISCAT_REPORT}"
+

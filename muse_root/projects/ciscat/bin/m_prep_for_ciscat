@@ -1,0 +1,31 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   m_prep_for_ciscat
+## Author       :   Bradley Atkins
+## Description  :   Setup for running the ciscat suite
+## Date         :   23/09/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## M_JOB_HOST
+## M_GREP_PATTERN "^[[:alnum:]]+: |^/.*: |error|info|warning"
+##
+##############################################################
+SCRIPT_NAME=m_prep_for_ciscat
+
+CISCAT_REPORT="${M_CISCAT_REPORT}"
+
+if [[ -f "${CISCAT_REPORT}" ]]
+then
+    mv "${CISCAT_REPORT}" "${CISCAT_REPORT}.$(date +%s).old"
+    echo "Archived existing report (${CISCAT_REPORT}.$(date +%s).old)"
+fi
+
+echo "Status|Test Case ID|Description|Score" > "${CISCAT_REPORT}"
+
+echo "New report created (${CISCAT_REPORT})"
+
+

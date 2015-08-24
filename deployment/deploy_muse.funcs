@@ -350,7 +350,7 @@ deploy_muse_to_cluster()
     #======================================
     for THOST in ${DHOSTS}
     do
-        echo "copying MUSE to - ${THOST}"
+        echo "Deploying MUSE to - ${THOST}"
         scp -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_DEP_CFG}" "${SELF_ROOT}/${MUSE_TAR}" "${THOST}:." >/dev/null 2>&1 || die "SCP failed for host ${THOST}"
         scp -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_DEP_CFG}" "${SELF_ROOT}/install_muse" "${THOST}:." >/dev/null 2>&1 || die "SCP failed for host ${THOST}"
         ssh -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_INS_CFG}" "${THOST}" "cd ~${SSH_DEP_USR};./install_muse" >/dev/null 2>&1 || die "Install failed for host ${THOST}"
@@ -359,8 +359,10 @@ deploy_muse_to_cluster()
     #======================================
     # Cleanup
     #======================================
-    [[ -f "${SELF_ROOT}/${SSH_DEP_CFG}" ]] && rm -f "${SELF_ROOT}/${SSH_DEP_CFG}"
-    [[ -f "${SELF_ROOT}/${SSH_INS_CFG}" ]] && rm -f "${SELF_ROOT}/${SSH_INS_CFG}"
-    [[ -f "${SELF_ROOT}/${MUSE_TAR}" ]] && rm -f "${SELF_ROOT}/${MUSE_TAR}"
-
+    if "${CLEAN_UP_ON_EXIT}"
+    then
+        [[ -f "${SELF_ROOT}/${SSH_DEP_CFG}" ]] && rm -f "${SELF_ROOT}/${SSH_DEP_CFG}"
+        [[ -f "${SELF_ROOT}/${SSH_INS_CFG}" ]] && rm -f "${SELF_ROOT}/${SSH_INS_CFG}"
+        [[ -f "${SELF_ROOT}/${MUSE_TAR}" ]] && rm -f "${SELF_ROOT}/${MUSE_TAR}"
+    fi
 }

@@ -42,7 +42,7 @@ m_print_master_exec_line()
 {
     [[ $# -eq 3 ]] || m_fail 13 "Error: Usage. Arg count. 3 expected  (${FUNCNAME})" 
     [[ "${1}" =~ ^[[:digit:]]+$ ]] || m_fail 13 "Error: Usage. Arg[1]. Integer expected (${FUNCNAME})" 
-    [[ "${2}" =~ ^m_[a-zA-Z_]+$ ]] || m_fail 13 "Error: Usage. Arg[2]. Plugin name expected (${FUNCNAME})" 
+    [[ "${2}" =~ ^m_[a-zA-Z0-9_]+$ ]] || m_fail 13 "Error: Usage. Arg[2]. Plugin name expected (${FUNCNAME})" 
     [[ -n "${3}" ]] || m_fail 13 "Error: Usage. Arg[3]. Host name expected (${FUNCNAME})" 
 
     if [[ "${M_SCREEN_MODE}" == "dynamic" ]]
