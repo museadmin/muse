@@ -111,7 +111,12 @@ else
     # No arg so use menu
     #======================================
     get_clusters_from_hosts CLUSTERS
+    clear
+    echo "======================================="
+    echo "       MUSE Apollo Deployment"
+    echo "======================================="
     get_menu_item "Select a cluster to deploy MUSE to" THIS_CLUSTER "All" "${CLUSTERS}" "Quit"
+    clear 
 
     case ${THIS_CLUSTER} in 
         "Quit")
@@ -132,6 +137,9 @@ else
                 done
             ;;
         *)
+                echo "======================================="
+                echo "          Deploying MUSE"
+                echo "======================================="
                 #======================================
                 # Get host names for specific cluster
                 #======================================

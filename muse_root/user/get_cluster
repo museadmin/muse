@@ -6,7 +6,7 @@
 ## Description  :   User defined file should return the cluster
 ##                  name on stdout. Or if deployer has set env
 ##                  var PRIME_GET_CLUSTER=true, deployer will 
-##                  write cluster name to _CLUSTER_NAME_ tag
+##                  write cluster name to CLUSTER_NAME tag
 ## Date         :   18/07/2015
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
