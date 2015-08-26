@@ -1,3 +1,4 @@
+#! /bin/bash
 ##############################################################
 ##
 ## Name         :   Time functions for muse
@@ -36,6 +37,7 @@
 ##############################################################
 m_get_epoch_milliseconds()
 {
+    [[ $# -eq 1 ]] || m_fail 2 "Error: Usage. Arg count. 1 expected (${FUNCNAME})" 
     [[ ${1} =~ ^[A-Z0-9_]+$ ]] || m_fail 2 "Error: MUSE variable name expected (${FUNCNAME})" 
     local T="$(($(date +%s%N)/1000000))"
     [[ ${T} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Failed to recover epoch time. (${FUNCNAME})" 
@@ -52,20 +54,29 @@ m_get_epoch_milliseconds()
 ##                  "January 1, 1980 23:59:59"
 ##                  "January 1 1980 23:59:59"
 ##                  "1980/1/1 00:00:01"
+##                  2 - Variable to return value
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
 ##############################################################
 m_get_epoch_seconds()
 {
-    [[ $# -gt 1 ]] && return 1
+    [[ ($# -eq 1) || ($# -eq 2) ]] || m_fail 2 "Error: Usage. Arg count. 1 or 2 expected (${FUNCNAME})" 
+    [[ -n "${1}" ]] || m_fail 2 "Error: Usage. Arg[1]. Time string or variable name expected (${FUNCNAME})" 
+    if [[ $# -eq 2 ]]
+    then
+        [[ -n "${2}" ]] || m_fail 2 "Error: Usage. Arg[2]. Variable name expected (${FUNCNAME})" 
+    fi
 
-    local TIME="$(date +%s)"
-
-    [[ $# -eq 1 ]] && TIME=$(date +%s -d "${1}" 2>/dev/null)   
-    [[ $? -eq 0 ]] || return 2
-
-    echo "${TIME}"
+    if [[ $# -eq 2 ]]
+    then
+        TIME=$(date +%s -d "${1}" 2>/dev/null)
+        [[ $? -eq 0 ]] || m_fail 2 "Error: Conversion failed for (${1}) (${FUNCNAME})" 
+        eval "${2}"="${TIME}"
+    else
+        local TIME="$(date +%s)"
+        eval "${1}"="${TIME}"
+    fi
 }
 ##############################################################
 ##
@@ -74,25 +85,32 @@ m_get_epoch_seconds()
 ## Description  :   Return the duration (diff) between a start
 ##                  and an end time.
 ## Date         :   26/09/2012
-## Args         :   
+## Args         :   1 - Start Time
+##                  2 - Finish Time
+##                  3 - Variable for return value
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
 ##############################################################
 m_get_duration()
 {
-    [[ $# -eq 2 ]] || m_fail 1 "Error: Usage args (${FUNCNAME})"
+    [[ $# -eq 3 ]] || m_fail 1 "Error: Usage. arg count. 3 expected (${FUNCNAME})"
+    [[ -n "${1}" ]] || m_fail 1 "Error: Usage. Arg[1]. Time string expected (${FUNCNAME})" 
+    [[ -n "${2}" ]] || m_fail 1 "Error: Usage. Arg[2]. Time string expected (${FUNCNAME})" 
+    [[ -n "${3}" ]] || m_fail 1 "Error: Usage. Arg[3]. Variable name expected (${FUNCNAME})" 
     
-    local TM1="${1}" TM2="${2}" SECS1 SECS2 SECS
+    local TM1="${1}" TM2="${2}" SECS1= SECS2= SECS= D=
 
-    SECS1=$(m_get_epoch_seconds "${TM1}") || m_fail 1 "Error: Incorrect time format for conversion (${TM1}) (${FUNCNAME})"
-    SECS2=$(m_get_epoch_seconds "${TM2}") || m_fail 1 "Error: Incorrect time format for conversion (${TM2}) (${FUNCNAME})"
+    m_get_epoch_seconds "${TM1}" SECS1 || m_fail 2 "Error: Conversion failed for (${TM1}) (${FUNCNAME})" 
+    m_get_epoch_seconds "${TM2}" SECS2 || m_fail 2 "Error: Conversion failed for (${TM2}) (${FUNCNAME})" 
 
     [[ ${SECS2} -ge ${SECS1} ]] || m_fail 1 "Error: Negative time (${FUNCNAME})" 
 
     SECS=$(( SECS2 - SECS1 ))
 
-    M_JOB_DURATION=$(printf ""%dh:%dm:%ds"\n" $((${SECS}/3600)) $((${SECS}%3600/60)) $((${SECS}%60)))
+    D=$(printf ""%dh:%dm:%ds"\n" $((${SECS}/3600)) $((${SECS}%3600/60)) $((${SECS}%60)))
+
+    eval "${3}"="${D}"
 }
 ##############################################################
 ##
@@ -103,6 +121,7 @@ m_get_duration()
 ## Date         :   24/09/2012
 ## Args         :   1 - Valid date format string
 ##                  2 - Time (Epoch Seconds) '@nnnnnnnn'
+##                  3 - Variable name for return value
 ##              e.g. -
 ##                  "%d/%m/%Y" "@2147483647"
 ##                  "%d/%m/%Y %H:%M:%S" "@2147483647"
@@ -113,16 +132,22 @@ m_get_duration()
 ##############################################################
 m_get_date_from_epoch()
 {
-    ## Usage
-    [[ $# -eq 2 ]] || return 1
+    [[ $# -eq 3 ]] || m_fail 2 "Error: Usage. Arg count. 3 expected (${FUNCNAME})" 
+    [[ -n "${1}" ]] || m_fail 2 "Error: Usage. Arg[1]. Valid time format string expected (${FUNCNAME})" 
+    [[ ${2} =~ ^[@]{1}[[:digit:]]+$ ]] || m_fail 2 "Error: Usage. Arg[2]. Epoch string expected (${FUNCNAME})" 
+    [[ -n "${3}" ]] || m_fail 2 "Error: Usage. Arg[3]. Variable name expected (${FUNCNAME})" 
     
-    local FORMAT= EPOCH=
+    local EPOCH= FORMAT="+\"${1}\"" TS=
 
-    [[ $# -eq 2 ]] && FORMAT="+\"${1}\""
-
-    [[ ${2} =~ ^[@]+[[:digit:]]+$ ]] || return 2
-
-    eval date --date="${2}" "${FORMAT}" || return 3
+    #======================================
+    # Let date throw a fail for us
+    #======================================
+    date --date="${2}" +"${1}" > /dev/null 2>&1 || 
+        m_fail 2 "Error: Failed to convert seconds (${2}) to timestamp (${1}) (${FUNCNAME})" 
+    
+    TS=$(date --date="${2}" +"${1}")
+    
+    eval "${3}"='${TS}'
 }
 ##############################################################
 ##
@@ -131,14 +156,17 @@ m_get_date_from_epoch()
 ## Description  :   Convert epoch seconds to HMS
 ## Date         :   26/09/2012
 ## Args         :   1 - Epoch secs
+##                  2 - Var name for return value
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
 ##############################################################
 m_get_hms()
 {
-    [[ $# -eq 1 ]] || m_fail 1 "Error: Usage args (${FUNCNAME})"
-    [[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 1 "Error: Usage format (${FUNCNAME})" 
+    [[ $# -eq 2 ]] || m_fail 1 "Error: Usage. Arg count. 2 expected (${FUNCNAME})"
+    [[ ${1} =~ ^[[:digit:]]+$ ]] || m_fail 1 "Error: Usage. Arg[1]. Integer expected (${FUNCNAME})" 
+    [[ -n "${2}" ]] || m_fail 2 "Error: Usage. Arg[2]. Variable name expected (${FUNCNAME})" 
+    local SECS="${1}"
 
-    printf ""%dh:%dm:%ds"\n" $(($SECS/3600)) $(($SECS%3600/60)) $(($SECS%60))
+    eval ${2}=$(printf "%dh:%dm:%ds" $(($SECS/3600)) $(($SECS%3600/60)) $(($SECS%60)))
 }
