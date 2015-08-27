@@ -95,7 +95,7 @@ DFUNCS="${SELF_ROOT}/deploy_muse.funcs"
 [[ -r "${DFUNCS}" ]] || die "Failed to find readable library (${DFUNCS})"
 source "${DFUNCS}" || die "Failed to source library (${DFUNCS})"
 
-
+export COLUMNS=1
 
 #======================================
 # Start
