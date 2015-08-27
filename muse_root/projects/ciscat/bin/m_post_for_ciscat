@@ -1,0 +1,43 @@
+#! /bin/bash
+##############################################################
+##
+## Name         :   m_post_for_ciscat
+## Author       :   Bradley Atkins
+## Description  :   Read all of the reports from the CISCAT suite
+## Date         :   27/08/2015
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##
+## M_JOB_HOST
+## M_GREP_PATTERN "^[[:alnum:]]+: |^/.*: |error|info|warning"
+##
+##############################################################
+SCRIPT_NAME=m_post_for_ciscat
+
+[[ -d "${M_CISCAT_REPORT}" ]] || m_fail 2 "Error: Failed to find report directory (${M_CISCAT_REPORT}) (${SCRIPT_NAME})" 
+
+m_get_tmp_file "${SCRIPT_NAME}" TMPFILE1
+
+m_print_marker ${C_EXCLUSION_MARKER} 
+
+#======================================
+# Get all the reports in run order
+#======================================
+for f in $(ls -1rt "${M_CISCAT_REPORT}/")
+do
+    cat "${M_CISCAT_REPORT}/${f}" >> "${TMPFILE1}" || m_fail 2 "Error: Failed to write to tmp file (${TMPFILE1}) (${SCRIPT_NAME})" 
+done
+
+#======================================
+# Calculate the score for the server
+#======================================
+SCORE=$(awk -v S=0 '($NF){S+=$NF}END{printf "%d", S}' FS="|" "${TMPFILE1}")
+TOTAL=$(wc -l "${TMPFILE1}" | cut -d" " -f1)
+
+m_print_headed_line "CISCAT Test Suite Results"
+cat "${TMPFILE1}"
+m_print_headed_line "Total Tests = ${TOTAL} Score = ${SCORE}"
+
+m_print_marker ${C_EXCLUSION_MARKER}
