@@ -1217,7 +1217,7 @@ m_validate_cmd_line()
                 ;;
         esac
     fi
-exit
+
     #======================================
     # Echo  the command line into suite 1
     # $@ i= cmd line -opts
