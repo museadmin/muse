@@ -1249,19 +1249,16 @@ m_validate_cmd_line()
     find "${M_MS_OBJ}" -type f -name \*ms_\* > "${TMPFILE}"
     cat "${M_MUSE_MAP}" >> "${TMPFILE}"
     mv "${TMPFILE}" "${M_MUSE_MAP}"
-
     #======================================
     # Now parse the cmd line suite and all 
     # children
     #======================================
     m_expand_suite ms_cmd_line 0 "" 1 1
-
     #======================================
     # Propagate all inline variables that 
     # were found to the children of each suite
     #======================================
     m_propagate_inline_variables
-
     #======================================
     # Run through the exec table looking for 
     # any plugins set to run on a variable
@@ -1270,17 +1267,15 @@ m_validate_cmd_line()
     #======================================
     m_update_run_hosts
     m_get_server_list M_SERVER_LIST
-
     #======================================
     # Set exec_line in primary record
     #======================================
     m_update_exec_data 1 'exec_line' 1
     m_set_primary_execution_thread
-   
     #======================================
     # If this is an EXPLAIN then no run. 
     # Special handling reuired as explain
-    # must use expand suite
+    # must use expand suite call
     #======================================
     if ${EXPLAIN}
     then
@@ -1318,12 +1313,13 @@ m_expand_suite()
     local JOB_HOST JOB JOB_CNT=0 CMD_LIST FQSF FQJF SUITE="${1}"  WAIT=1 BG=1 LINE= HOSTS= FQJOB= NEXT_ID=
     local GRP_ID=0 PARENT_ID=${2} SUITE_ID= TMP= NAME= PS= ANCESTORS= CLEANFILE= LINE_NO=1 PARENT_LINE_NO=${6:-1}
 
+    #======================================
+    # Get rid of all the comments etc and
+    # copy suite to a tmp file
+    #======================================
     m_get_tmp_file ${FUNCNAME}_${2} CLEANFILE
-
     m_find_file "${SUITE}" FQSF
     m_check_file -rsf "${FQSF}" || m_fail 2 "File (${SUITE}) failed permissions check -rsf (${FUNCNAME})"
-
-    ## Get rid of all the comments etc and copy to tmp file
     m_clean_file "${FQSF}" "${CLEANFILE}"
 
     #======================================
@@ -1364,70 +1360,77 @@ m_expand_suite()
     #======================================
     while read LINE
     do
-
-        ## Look for BG on line
+        #======================================
+        # Look for BG on line
+        #======================================
         m_check_bg TMP ${LINE} && BG=0 
         LINE=${TMP}
-
-        ## Look for WAIT on line
+        #======================================
+        # Look for WAIT on line
+        #======================================
         m_check_wait TMP ${LINE} && WAIT=0 
         LINE=${TMP}
-
         #======================================
         # Single job on line or multiple?
         # Multiple - implicite BG job/s in grp
         #======================================
-        if [[ $(echo ${LINE} | m_get_line_items | wc -l) -gt 1 ]] 
+        if [[ $(echo ${LINE} | wc -w) -gt 1 ]] 
         then
             m_get_next_grp_id GRP_ID
             BG=0
-        else
-            #======================================
-            # Single job or suite is implicit wait
-            #======================================
-            WAIT=0
         fi
 
         while read JOB 
         do
             #======================================
-            # Check for implicit wait for single fg
+            # Check for implicit WAIT for single fg
+            # job with no BG on line
             #======================================
-            [[ $(echo ${LINE} | wc -w) -eq 1 ]] && WAIT=0
+            [[ ($(echo ${LINE} | wc -w) -eq 1) && (${BG} -eq 1) ]] && WAIT=0
                     
-            ## Job with any args
+            #======================================
+            # Fully qualified job with any args
+            #======================================
             FQJOB="${JOB}"
-            ## Remove any args
+            #======================================
+            # Job stripped of any args
+            #======================================
             JOB=${JOB%%(*}
-
+            #======================================
+            # Is this a suite or a plugin?
+            #======================================
             if [[ ${JOB} =~ ^(ms_[[:alnum:]]+) ]]
             then
-                ## Add suite as a member of this parent suite before exanding
+                #======================================
+                # Capture that this is a child of it parent
+                #======================================
                 m_get_exec_data ${SUITE_ID} member_count TMP
                 [[ ${TMP} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: member_count, integer expected [1] (${FUNCNAME})" 
                 TMP=$(( TMP + 1 ))
                 m_update_exec_data ${SUITE_ID} member_count ${TMP}
-
-                ## Get the next exec id 
-                m_get_next_exec_id NEXT_ID
-
                 #======================================
-                # Check if we have any args and parse
+                # Get the next exec id
+                #======================================
+                m_get_next_exec_id NEXT_ID
+                #======================================
+                # Check if we have any args for this item
                 #======================================
                 m_handle_job_args ${NEXT_ID} "${FQJOB}" 
 
-                ## Now expand the new suite
+                #======================================
+                # Recursive call to expand this suite
+                #======================================
                 m_expand_suite ${JOB} ${SUITE_ID} ${GRP_ID} ${WAIT} ${BG} ${LINE_NO}
             else
                 #======================================
                 # Discover where the plugin will run
-                # from its header
+                # from its header field JOB_HOST
                 #======================================
                 m_parse_muse_script ${JOB} G_HOSTS
                 [[ -n ${G_HOSTS} ]] || m_fail 2 "Error: Host retrieval from plugin (${JOB}) (${FUNCNAME})" 
                 #======================================
-                # Implicit BG group as multiple hosts
-                # in header JOB_HOST
+                # Implicit BG group if multiple hosts
+                # resolved from header JOB_HOST
                 #======================================
                 if [[ $(echo ${G_HOSTS} | wc -w) -gt 1 ]] 
                 then
@@ -1439,7 +1442,9 @@ m_expand_suite()
                 for JOB_HOST in ${G_HOSTS}
                 do
                     m_find_file ${JOB} FQJF
-                    ## Create a new record for the plugin
+                    #======================================
+                    # Create a new record for the plugin
+                    #======================================
                     m_create_exec_record ${SUITE_ID} JOB_ID
                     m_update_exec_data ${JOB_ID} name ${JOB}
                     m_update_exec_data ${JOB_ID} bg ${BG} 
@@ -1449,25 +1454,31 @@ m_expand_suite()
                     m_update_exec_data ${JOB_ID} path ${FQJF} 
                     m_update_exec_data ${JOB_ID} host ${JOB_HOST}
                     m_update_exec_data ${JOB_ID} exec_type "plugin"
-
-                    ## Update suite member count for new job
+                    #======================================
+                    # Update suite member count for new job
+                    #======================================
                     m_get_exec_data ${SUITE_ID} member_count TMP
                     [[ ${TMP} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: member_count, integer expected [2] (${FUNCNAME})" 
                     TMP=$(( TMP + 1 ))
                     m_update_exec_data ${SUITE_ID} member_count ${TMP}
-
                     #======================================
                     # Check if we have any args and parse
                     #======================================
                     m_handle_job_args ${JOB_ID} "${FQJOB}" 
                 done
             fi
+        #======================================
+        # Inner loop reads each item on line
+        #======================================
         done < <(echo ${LINE} | m_get_line_items)
         
         LINE_NO=$(( LINE_NO + 1 ))
         WAIT=1
         BG=1
         GRP_ID=0
+    #======================================
+    # Outer loop reads each line in suite
+    #======================================
     done < "${CLEANFILE}"
 } 
 ##############################################################
