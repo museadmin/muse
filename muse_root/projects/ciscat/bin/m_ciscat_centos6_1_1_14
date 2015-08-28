@@ -1,9 +1,9 @@
 #! /bin/bash
 ##############################################################
 ##
-## Name         :   m_ciscat_centos6_1_1_4
+## Name         :   m_ciscat_centos6_1_1_14
 ## Author       :   Bradley Atkins
-## Description  :   1.1.4 Set noexec option for /tmp Partition (Scored)
+## Description  :   1.1.14 Add nodev Option to /dev/shm Partition (Scored)
 ## Date         :   23/09/2014
 ## Args         :   
 ## Status       :   Reviewed    [n]
@@ -13,22 +13,22 @@
 ## M_JOB_HOST
 ## M_GREP_PATTERN "^[[:alnum:]]+: |^/.*: |error|info|warning"
 ##
-##############################################################
-SCRIPT_NAME=m_ciscat_centos6_1_1_4
+#############################################################
+SCRIPT_NAME=m_ciscat_centos6_1_1_14
 
 CISCAT_REPORT="${M_CISCAT_REPORT}/${SCRIPT_NAME}"
-RESULT="Passed|1|1.1.4|Set noexec option for /tmp Partition|1"
+RESULT="Passed|1|1.1.14|Add nodev Option to /dev/shm Partition|1"
 
 m_print_marker ${C_EXCLUSION_MARKER} 
 
-if ! grep /tmp /etc/fstab | grep noexec
+if ! grep /dev/shm /etc/fstab | grep nodev
 then
-    RESULT="Failed|1|1.1.4|Set noexec option for /tmp Partition|-1"
+    RESULT="Failed|1|1.1.14|Add nodev Option to /dev/shm Partition|-1"
 fi
 
-if [[ -z $(mount | grep /tmp | grep noexec) ]]
+if [[ -z $(mount | grep /dev/shm | grep nodev) ]]
 then
-    RESULT="Failed|1|1.1.4|Set noexec option for /tmp Partition|-1"
+    RESULT="Failed|1|1.1.14|Add nodev Option to /dev/shm Partition|-1"
     echo "Failed"
 else
     echo "Passed"

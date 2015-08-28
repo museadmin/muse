@@ -16,16 +16,7 @@
 ##############################################################
 SCRIPT_NAME=m_prep_for_ciscat
 
-CISCAT_REPORT="${M_CISCAT_REPORT}"
+mkdir -p "${M_CISCAT_REPORT}"
+[[ -d "${M_CISCAT_REPORT}" ]] || m_fail 2 "Error: Failed to create new report directory (${M_CISCAT_REPORT}) (${SCRIPT_NAME})" 
 
-if [[ -f "${CISCAT_REPORT}" ]]
-then
-    mv "${CISCAT_REPORT}" "${CISCAT_REPORT}.$(date +%s).old"
-    echo "Archived existing report (${CISCAT_REPORT}.$(date +%s).old)"
-fi
-
-echo "Status|Test Case ID|Description|Score" > "${CISCAT_REPORT}"
-
-echo "New report created (${CISCAT_REPORT})"
-
-
+echo "New report directory created (${M_CISCAT_REPORT})"

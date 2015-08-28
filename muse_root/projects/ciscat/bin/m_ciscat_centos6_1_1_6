@@ -16,19 +16,19 @@
 ##############################################################
 SCRIPT_NAME=m_ciscat_centos6_1_1_6
 
-CISCAT_REPORT="${M_CISCAT_REPORT}"
-RESULT="Passed|1.1.6|Bind Mount the /var/tmp directory to /tmp|1"
+CISCAT_REPORT="${M_CISCAT_REPORT}/${SCRIPT_NAME}"
+RESULT="Passed|1|1.1.6|Bind Mount the /var/tmp directory to /tmp|1"
 
 m_print_marker ${C_EXCLUSION_MARKER} 
 
 if ! grep -e "^/tmp" /etc/fstab | grep /var/tmp
 then
-    RESULT="Failed|1.1.6|Bind Mount the /var/tmp directory to /tmp|1"
+    RESULT="Failed|1|1.1.6|Bind Mount the /var/tmp directory to /tmp|-1"
 fi
 
 if [[ -z $(mount | grep -e "^/tmp" | grep /var/tmp) ]]
 then
-    RESULT="Failed|1.1.6|Bind Mount the /var/tmp directory to /tmp|1"
+    RESULT="Failed|1|1.1.6|Bind Mount the /var/tmp directory to /tmp|-1"
     echo "Failed"
 else
     echo "Passed"

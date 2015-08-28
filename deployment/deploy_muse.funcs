@@ -277,6 +277,7 @@ create_ssh_cfg()
             #======================================
             local THIS_FWL=
             get_host_from_cluster "${2}" FQNAME "FWL" THIS_FWL
+            [[ -n "${THIS_FWL}" ]] || die "Failed to retrieve firewall settings from muse.hosts for cluster (${2})"
 
             for THOST in ${HOST_NAMES[@]}
             do
