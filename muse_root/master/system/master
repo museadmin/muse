@@ -120,6 +120,7 @@ usage()
     printf "\t%s\n" "${0##*/} -ls [%pattern]            :List all muse suites 'like' pattern"
     printf "\t%s\n" "${0##*/} -lstr <string>            :List all occourences of string"
     printf "\t%s\n" "${0##*/} -mdb|--mdatabase          :Login to the master database for the last run"
+    printf "\t%s\n" "${0##*/} -noop                     :Debug option - Parse and setup but don't run"
     printf "\t%s\n" "${0##*/} -s|--show                 :Show current results tag"
     printf "\t%s\n" "${0##*/} -sdb|--sdatabase          :Login to the slave database for the last run"
     printf "\t%s\n" "${0##*/} -sm [dynamic|flat]        :Set the creen mode to dynamic or flat"
@@ -634,6 +635,7 @@ do
                                 m_get_epoch_milliseconds SM_TM
                                 m_get_exec_data ${SM_SIB} name SM_NAME
                                 m_get_exec_data ${SM_SIB} bg SM_BG
+                                m_get_exec_data ${SM_SIB} wait SM_WAIT
                                 m_get_exec_data ${SM_SIB} host SM_HOST
                                 case ${SM_NAME} in
                                     ms_*)
@@ -691,9 +693,9 @@ do
                                 
                             #======================================
                             # If a BG line then inc exec_line for
-                            # this suite record
+                            # this suite record if no WAIT
                             #======================================
-                            if [[ ${SM_BG} -eq 0 ]]
+                            if [[ (${SM_BG} -eq 0) && (${SM_WAIT} -ne 0) ]]
                             then
                                 m_get_exec_data ${SM_SID} exec_line SM_EL
                                 m_update_exec_data ${SM_SID} exec_line $(( SM_EL + 1 ))

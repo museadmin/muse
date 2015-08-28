@@ -1062,6 +1062,10 @@ m_validate_cmd_line()
                 M_ACTION=NORUN
                 return 0
                 ;;
+            -noop) ## Setup but don't run anything
+                shift
+                M_ACTION=NORUN
+                ;;
             -s|--show) ## Show the current user tag
                 m_remove_run_files
                 printf "\n%s\n\n" "Current user tag - ${M_USR_TAG}"
@@ -1274,15 +1278,15 @@ m_validate_cmd_line()
     m_set_primary_execution_thread
    
     #======================================
-    # If this is an EXPLAIN then no run
+    # If this is an EXPLAIN then no run. 
+    # Special handling reuired as explain
+    # must use expand suite
     #======================================
     if ${EXPLAIN}
     then
         M_ACTION=NORUN
         m_select_lines "select name from exec where exec_type = 'plugin' order by id;" "${TMPFILE}"
         awk -v n=1 'NF{ printf "%-5d - %s\n", n++, $NF } ' "${TMPFILE}"
-    else
-        M_ACTION=RUN
     fi
 }
 
@@ -1415,9 +1419,22 @@ m_expand_suite()
                 ## Now expand the new suite
                 m_expand_suite ${JOB} ${SUITE_ID} ${GRP_ID} ${WAIT} ${BG} ${LINE_NO}
             else
-                ## Discover where the plugin will run
+                #======================================
+                # Discover where the plugin will run
+                # from its header
+                #======================================
                 m_parse_muse_script ${JOB} G_HOSTS
                 [[ -n ${G_HOSTS} ]] || m_fail 2 "Error: Host retrieval from plugin (${JOB}) (${FUNCNAME})" 
+                #======================================
+                # Implicit BG group as multiple hosts
+                # in header JOB_HOST
+                #======================================
+                if [[ $(echo ${G_HOSTS} | wc -w) -gt 1 ]] 
+                then
+                    m_get_next_grp_id GRP_ID 
+                    BG=0
+                    WAIT=0
+                fi
 
                 for JOB_HOST in ${G_HOSTS}
                 do
@@ -1450,6 +1467,7 @@ m_expand_suite()
         LINE_NO=$(( LINE_NO + 1 ))
         WAIT=1
         BG=1
+        GRP_ID=0
     done < "${CLEANFILE}"
 } 
 ##############################################################
