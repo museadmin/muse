@@ -1,0 +1,743 @@
+#! /bin/bash
+##############################################################
+##
+## Name		    :	slave
+## Author	    :	Bradley Atkins
+## Description	:	The slave instance of MUSE. Runs as a 
+##                  detached task on the slave servers. Receives
+##                  commands from the master to run plugins locally
+##                  and log the results. Reports to master -
+##                  COMPLETED   (Success)
+##                  FAILED      (Non fatal error)
+##                  FATAL       (Fatal error occured. Shutdown cluster wide)
+## Date		    :	21/07/2013
+## Args		    :	
+## Status	    :	Reviewed 	[n]
+##			        Tested 		[n]
+##
+## This program is free software; you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, version 2 only.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program; if not, write to the Free Software
+## Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  
+## USA
+##
+##############################################################
+
+##############################################################
+##
+## Name         :   cleanup
+## Author       :   Bradley Atkins
+## Description  :   Shutdown the slave gracefully on exit
+##                  First connection then rx
+## Date         :   19/12/2013
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+cleanup()
+{
+    local MSG
+    #======================================
+    # Close our connections if set by slave
+    #======================================
+    if [[ -f "${M_CNXN_CTL_FILE}" ]] 
+    then
+        echo stop > /tmp/slave_cnxn_ctl
+        mv /tmp/slave_cnxn_ctl "${M_CNXN_CTL_FILE}"
+    fi
+
+    #======================================
+    # Close all rx and tx
+    #======================================
+    if [[ -d "${M_CONTROL}" ]]
+    then
+        echo "EXIT" > "${M_CONTROL}/rx.ctl" 2>/dev/null
+        echo "EXIT" > "${M_CONTROL}/tx.ctl" 2>/dev/null
+    fi
+    
+    #======================================
+    # Explicitely close any open descriptors
+    # in case we are being called via ssh
+    #======================================
+    if [[ -d /proc ]]
+    then
+        for fd in $(ls /proc/$$/fd); do
+            case "$fd" in
+                0|1|2|255)
+                ;;
+                *)
+                    eval "exec $fd>&-"
+                ;;
+            esac
+        done
+    fi
+} 
+
+trap cleanup SIGINT SIGTERM SIGHUP EXIT
+
+##############################################################
+##
+## Name         :   die_local
+## Author       :   Bradley Atkins
+## Description  :   Fail before we manage to bootstrap slave
+## Date         :   20/10/2012
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+die_local()
+{
+    echo "$(date): Error: $1" >> "${M_LOG}"
+    exit 1
+} 
+##############################################################
+##
+## Name         :   log_local
+## Author       :   Bradley Atkins
+## Description  :   Temp logging until bootstrap includes slave
+##                  log.
+## Date         :   23/03/2014
+## Args         :   
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+log_local()
+{
+    echo "$(date): SLAVE:  ${2}: ${1}" >> "${M_LOG}"
+} 
+
+dump_env()
+{
+    echo "========================================="
+    echo Dumping MUSE runtime environment
+    echo "========================================="
+    env | egrep "^M_" > /tmp/srt
+    cat /tmp/srt | sort
+    rm /tmp/srt
+} >> "${M_LOG}"
+
+#======================================
+# Handle our sourcing
+#======================================
+include()
+{
+    local F=
+
+    m_find_file ${1} F || die_local "Failed to find (${1})"
+    if ! grep "${F}" "${M_INCLUDE_REGISTER}"
+    then
+        source "${F}" || die_local "Failed to source file (${1})"
+        local BASE="M_$(echo ${1%.*}_${1#*.} | tr '[:lower:]' '[:upper:]')"
+        export eval $BASE=${F}
+        echo "${F}" >> "${M_INCLUDE_REGISTER}"
+    fi
+    log_local "Include library ${1} - success" "INFO"
+}
+
+#======================================
+# Log a security error and exit
+#======================================
+handle_security_error()
+{
+    log_local "Security Alert. ${1}" "SECURITY WARNING"
+    log_local "Security Alert. Dumping argument list" "SECURITY WARNING"
+    for (( n = 1; n <= $#; n++ ))
+    do
+        eval log_local \"Arg ${n} = \$${n}\" "SECURITY WARNING"
+    done
+    die_local "Security Validation Failure. Arg count incorrect. ($#)"
+}
+
+#======================================
+# set perms for our runtime files
+#======================================
+umask u=rwx,g=rwx,o=rwx
+
+#======================================
+# Start
+#======================================
+if [[ -d /var/log/muse ]]
+then
+    export M_LOG=/var/log/muse/slave.log
+else
+    export M_LOG=/tmp/muse_error.log
+    die_local "Logging directory not found. Corrupt install?"
+fi
+
+log_local " =================== Beggining slave boot sequence $(hostname) =================== " "INFO"
+
+#======================================
+# Check we are being called correctly
+#======================================
+[[ $# -eq 12 ]] || handle_security_error "Slave called with incorrect argument count"
+
+cd /tmp || die_local "cd to /tmp failed"
+
+#======================================
+# Map our muse directories
+#======================================
+set -a
+
+    ## Root for mapping functions
+    M_ROOT="$(x=$(echo $(ls -l $(which slave) | cut -d">" -f2));echo ${x%/slave/system/slave})"
+    [[ -d "${M_ROOT}" ]] || die_local "Failed to find muse root"
+
+    M_MASTER_HOST=${1}
+    M_MASTER_MSG_DIR=${2}
+    M_SYS_TAG=${3}
+    M_USR_TAG=${4}
+    M_DEV_ROOT=$(echo ${5})
+    M_RUN_ID=${6}
+    M_SESSION_ID=${7}
+    M_RUN_MODE=${8}
+    M_IS_DEVELOPER="${9}"
+    M_LOG_LEVEL="${10}"
+    M_SLAVE_MD5="${11}"
+    M_MASTER_REPORTS="${12}"
+
+    if [[ ${M_IS_DEVELOPER} == "FALSE" ]]
+    then
+        [[ ${M_SLAVE_MD5} == $(md5sum $(which slave) | cut -d" " -f1) ]] || handle_security_error "Wrong MD5 sum for slave file"
+    fi
+
+    M_UTILS="${M_ROOT}/utils"
+    M_MUSE_MAP="/var/tmp/muse/m_system/m_slave_map"
+    M_INCLUDE_REGISTER="/var/tmp/.slave_include_register"
+    M_MAPPER="${M_ROOT}/utils/muse_mapper.funcs"
+    M_SERVER_LIST=${M_MASTER_HOST}
+
+    SM_RUNNING="FALSE"
+set +a
+
+[[ -n "${M_DEV_ROOT}" ]] && find "${M_DEV_ROOT}" -type f > "${M_MUSE_MAP}"
+find "${M_ROOT}" -type f >> "${M_MUSE_MAP}"
+
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && log_local "Security Validation Passed" "INFO"
+dump_env
+
+#======================================
+# Now we can find the libraries. Although
+# the libraries are owned by MC, we can
+# use them as we are sourcing them into
+# our shell, not running them in situ.
+#======================================
+source "${M_MAPPER}" || die_local "Failed to source muse_mapper"
+:> "${M_INCLUDE_REGISTER}"
+include env.dat
+include cnxn.funcs
+include comm.funcs
+include common.funcs
+include constants.dat
+include db.funcs
+include slave.env
+include slave.funcs
+include sm.funcs
+include msg.env
+include print.funcs
+include time.funcs
+
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Include libraries added successfully" "INFO"
+
+#======================================
+# Set up our runtime environment
+#======================================
+DBG=/tmp/debug
+:>$DBG
+m_init
+
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Environment initialisation successfull" "INFO"
+
+#======================================
+# Create a connection to the master
+# and initialise comms
+#======================================
+m_create_slave_cnxns
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Connection to master created" "INFO"
+m_create_slave_tx
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Transmiter created" "INFO"
+m_create_rx
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Receiver created" "INFO"
+
+#======================================
+# Setup state machine
+#======================================
+M_MUSE_CTL_FILE="${M_CONTROL_FILES}/muse.ctl"
+m_write_action "ACT" "CREATE_CONNECTION_DETAILS_MSG"
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "DB = ${M_DB}" "INFO"
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Run Mode = ${M_RUN_MODE}" "INFO"
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Starting state machine" "INFO"
+
+#======================================
+# The state machine
+#======================================
+while :
+do
+    SM_RUNNING="TRUE"
+    #==============================================================
+    # Initial Boot Sequence
+    #==============================================================
+
+    #======================================
+    # Initialise COMMS
+    #======================================
+    if m_read_action "CREATE_CONNECTION_DETAILS_MSG" 
+    then
+        ## Tell master to register us with our listener
+        m_get_epoch_milliseconds SM_TM
+        m_new_outbound_msg "0" "${SM_TM}" "${M_THREAD_ID}" "3" "$(hostname)" "${M_MASTER_HOST}" "REGISTER_SLAVE" "${M_CONTROL}" "OUTBOUND" "NEW" "${M_SESSION_ID}" SM_MID
+        m_inc_thread_id
+        if [[ -n ${SM_MID} ]]
+        then
+            m_write_state "TRUE" "INITIALISATION_MSG_WRITTEN"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Success writing initialisation msg"  "INFO"
+        else
+            m_write_state "TRUE" "INITIALISATION_MSG_FAILED"
+            m_write_action "ACT" "PROCESS_FATAL_ERROR"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Failed writing initialisation msg"  "ERROR"
+        fi
+        m_write_action "SKIP" "CREATE_CONNECTION_DETAILS_MSG"
+
+        ## Set a timer to check for ack
+        m_set_timer $(( SM_TM + (M_ACK_TO * 1000))) "${SM_MID}" "CHECK_ACK_RECEIVED" "ACT"
+
+    fi
+
+    #======================================
+    # Check we're initialised and emnable execution
+    #======================================
+    if m_read_action "VERIFY_READY_TO_EXECUTE"
+    then
+        if m_read_state "DUMP_LOADED"
+        then
+            m_write_state "TRUE" "SLAVE_READY_TO_EXECUTE"
+            m_write_action "ACT" "CHECK_FOR_ACK_TX"
+            m_write_action "SKIP" "VERIFY_READY_TO_EXECUTE"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Slave ready to execute"  "INFO"
+        fi
+    fi
+    #======================================
+    # Only enable execution after init success
+    #======================================
+    if m_read_state "SLAVE_READY_TO_EXECUTE"
+    then
+        #======================================
+        # Execute a plugin
+        #======================================
+        if m_read_action "EXECUTE_PLUGIN"
+        then
+            #======================================
+            # Get the details for this job
+            #======================================
+            m_get_payload_from_state_machine "EXECUTE_PLUGIN" SM_PAYLOAD
+            SM_PLUGIN_NAME=$(echo ${SM_PAYLOAD} | cut -d"," -f1)
+            SM_MD5SUM=$(echo ${SM_PAYLOAD} | cut -d"," -f2)
+            SM_MASTER_EXEC_ID=$(echo ${SM_PAYLOAD} | cut -d"," -f3)       # TODO use this to select the plugins vars
+            SM_MASTER_EXEC_ORDER=$(echo ${SM_PAYLOAD} | cut -d"," -f4)
+            m_get_epoch_milliseconds SM_TM
+
+            #======================================
+            # state_machine table holds msg id of
+            # inbound command to run plugin. Use
+            # this to get msg thread id and write
+            # it to job->originating_msg_id
+            #======================================
+            m_get_msg_id_from_state_machine "EXECUTE_PLUGIN" SM_MSG_ID
+            [[ ${SM_MSG_ID} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: MSG ID failed validation (EXECUTE_PLUGIN)"
+            m_get_thread_id_from_msg ${SM_MSG_ID} SM_THREAD_ID
+            [[ ${SM_THREAD_ID} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: THREAD ID failed validation (EXECUTE_PLUGIN)"
+
+            #======================================
+            # Get the plugin
+            #======================================
+            m_find_file ${SM_PLUGIN_NAME} SM_PLUGIN_FQN
+            
+            #======================================
+            # If a developer then user is allowed 
+            # to run a modified plugin
+            #======================================
+            if [[ ${M_IS_DEVELOPER} == "FALSE" ]]
+            then
+                [[ ${SM_MD5SUM} == $(md5sum ${SM_PLUGIN_FQN} | cut -d" " -f1) ]] || m_fail 2 "Error: Plugin (${SM_PLUGIN_NAME}) failed md5sum check. (EXECUTE_PLUGIN)" 
+                [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Plugin (${SM_PLUGIN_NAME}) survived md5sum check. " "INFO"
+            fi
+
+            #======================================
+            # All validated so launch and record
+            #======================================
+            m_add_new_job_to_db "${SM_PLUGIN_FQN}" SM_JOB_ID
+            SM_PLUGIN_REPORT="${M_RESULTS}/${SM_MASTER_EXEC_ID}-${SM_PLUGIN_FQN##*/}.rpt"
+            :>"${SM_PLUGIN_REPORT}"
+
+            #======================================
+            # Write header to report
+            #======================================
+            m_print_results_header "${SM_PLUGIN_NAME}" "$(date +"%H:%M:%S")" "${M_MASTER_HOST}" "$(hostname)" "${M_USR_TAG}" "${M_SYS_TAG}" "${SM_PLUGIN_REPORT}"
+
+            #======================================
+            # Configure the plugin's environment
+            #======================================
+            m_set_plugin_environment "${SM_PLUGIN_FQN}" ${SM_MASTER_EXEC_ID} SM_CLEAN_PLUGIN
+            chmod +x "${SM_CLEAN_PLUGIN}" || m_fail 3 "Error: (chmod +x ${SM_CLEAN_PLUGIN}) failed (EXECUTE_PLUGIN)" 
+
+            #======================================
+            # Run the plugin in BG
+            #======================================
+            sudo ${SM_CLEAN_PLUGIN} >> "${SM_PLUGIN_REPORT}" 2>&1 &
+            SM_EC=$?
+            [[ ${SM_EC} -eq 0 ]] || m_fail 2 "Error: Non zero exit code (${SM_EC}) launching background job. (EXECUTE_PLUGIN)" 
+            SM_PID=$!
+            [[ ${SM_PID} =~ ^[[:digit:]]+$ ]] || m_fail 3 "Error: Failed to recover PID of background plugin.  (EXECUTE_PLUGIN)" 
+            
+            #======================================
+            # Update the job record
+            #======================================
+            m_update_job_table ${SM_JOB_ID} "ctl" "${M_PLUGIN_CTL}/${SM_MASTER_EXEC_ID}_${SM_PLUGIN_NAME}.ctl"
+            m_update_job_table ${SM_JOB_ID} "report" "${SM_PLUGIN_REPORT}"
+            m_update_job_table ${SM_JOB_ID} "pid" "${SM_PID}"
+            m_update_job_table ${SM_JOB_ID} "name" "${SM_PLUGIN_NAME}"
+            m_update_job_table ${SM_JOB_ID} "master_exec_id" "${SM_MASTER_EXEC_ID}"
+            m_update_job_table ${SM_JOB_ID} "start_time" "${SM_TM}"
+            m_update_job_table ${SM_JOB_ID} "originating_msg_id" "${SM_THREAD_ID}"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Plugin (${SM_PLUGIN_NAME}) Launched successfully PID = (${SM_PID}). (EXECUTE_PLUGIN)" "INFO"
+
+            #======================================
+            # Need to test for job completion each
+            # iteration.
+            #======================================
+            m_write_action "SKIP" "EXECUTE_PLUGIN"
+        fi
+
+    fi
+
+    #======================================
+    # Confirm we have received an ACK for a 
+    # message sent previously within time
+    #======================================
+    if m_read_action "CHECK_ACK_RECEIVED"
+    then
+        m_get_payload_from_state_machine "CHECK_ACK_RECEIVED" SM_PAYLOAD
+        [[ ${SM_PAYLOAD} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Message  id expected. (CHECK_ACK_RECEIVED)" 
+        m_get_msg ${SM_PAYLOAD} SM_MSG "OUTBOUND"
+        [[ -n ${SM_MSG} ]] || m_fail 2 "Error: Failed to recover msg with id (${SM_PAYLOAD}) (CHECK_ACK_RECEIVED)" 
+        SM_ACK=$(echo ${SM_MSG} | cut -d"|" -f ${M_MSG_ACK})
+        if [[ ${SM_ACK} -eq 1 ]]
+        then
+            ## No ack received within timeout so mark as fail with 2
+            m_update_msgs_table "ack" 2 "msgs_id" ${SM_PAYLOAD}
+        fi
+        m_write_action "SKIP" "CHECK_ACK_RECEIVED"
+    fi
+
+    #======================================
+    # Check if any running jobs have 
+    # completed
+    #======================================
+    if m_read_action "CHECK_FOR_COMPLETED_JOBS"
+    then
+        if m_get_running_jobs SM_JOBS_FILE
+        then
+            #======================================
+            # Loop over each job in file
+            #======================================
+            while read SM_JOB_ID SM_PID SM_JOB_NAME SM_MASTER_EXEC_ID SM_THREAD_ID
+            do
+                SM_JOB_DETAILS="${SM_JOB_ID}|${SM_PID}|${SM_JOB_NAME}|${SM_MASTER_EXEC_ID}|${SM_THREAD_ID}"
+                #SM_JOB_ID=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f1)
+                #SM_PID=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f2)
+                #SM_JOB_NAME=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f3)
+                #SM_MASTER_EXEC_ID=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f4)
+                #SM_THREAD_ID=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f5)
+                
+                if [[ -z $(ps -ef | grep ${SM_PID} | grep ${SM_JOB_NAME} | grep -v grep | grep -v "Done") ]]
+                then
+                    [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Completed job found (${SM_JOB_DETAILS})" "INFO"
+                    #======================================
+                    # Inform the master that a job has
+                    # completed and also send the report
+                    #======================================
+                    
+                    #======================================
+                    # Update the job finish time in db
+                    #======================================
+                    m_get_epoch_milliseconds SM_TM
+                    m_update_job_table "${SM_JOB_ID}" "finish_time" "${SM_TM}"
+                    #======================================
+                    # Add a footer to report
+                    #======================================
+                    m_get_job_data "${SM_JOB_ID}" "report" SM_PLUGIN_REPORT
+                    m_print_results_trailer "$(date +"%H:%M:%S")" "${SM_PLUGIN_REPORT}"
+                    #======================================
+                    # Send the report to the master
+                    #======================================
+                    # TODO parameterise port
+                    SM_CNXN="${M_CNXN_DIR}/${M_MSG_USR}@${M_MASTER_HOST}:22"
+                    cat "${SM_PLUGIN_REPORT}" | ssh -S "${SM_CNXN}" ${M_MSG_USR}@${M_MASTER_HOST} "${M_MASTER_REPORTS}/$(hostname).${SM_PLUGIN_REPORT##*/}"
+                    echo "Report md5sum" | ssh -S "${SM_CNXN}" ${M_MSG_USR}@${M_MASTER_HOST} "${M_MASTER_REPORTS}/$(hostname).${SM_PLUGIN_REPORT##*/}.${M_MSG_OK}"
+                    #======================================
+                    # Tell the master
+                    #======================================
+                    [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Informing master of completed job (${SM_JOB_NAME})" "INFO"
+                    m_new_outbound_msg "0" "${SM_TM}" "${SM_THREAD_ID}" "3" "$(hostname)" "${M_MASTER_HOST}" "REGISTER_PLUGIN_COMPLETE" \
+                        "${SM_MASTER_EXEC_ID},${SM_TM},${SM_JOB_NAME}" "OUTBOUND" "NEW" "${M_SESSION_ID}" SM_MID
+                    m_inc_thread_id
+                    #======================================
+                    # Check for reported errors in plugin
+                    #======================================
+                    SM_PLUGIN_CTL="${M_PLUGIN_CTL}/${SM_MASTER_EXEC_ID}_${SM_JOB_NAME}.ctl"
+                    if grep "HANDLE_FATAL_ERROR" "${SM_PLUGIN_CTL}"
+                    then
+                        m_log_msg "Fatal Error reported by plugin (${SM_JOB_NAME})" "ERROR"
+                        m_set_action_payload "$(cat ${SM_PLUGIN_CTL} | cut -d"|" -f 2)" "HANDLE_FATAL_ERROR"
+                        m_write_action "ACT" "HANDLE_FATAL_ERROR"
+                    elif grep "HANDLE_NON_FATAL_ERROR" "${SM_PLUGIN_CTL}"
+                    then
+                        m_log_msg "Non fatal Error reported by plugin (${SM_JOB_NAME})" "ERROR"
+                        m_set_action_payload "$(cat ${SM_PLUGIN_CTL} | cut -d"|" -f 2)" "HANDLE_NON_FATAL_ERROR"
+                        m_write_action "ACT" "HANDLE_NON_FATAL_ERROR"
+                    fi
+                fi
+            #======================================
+            # Loop reads each line of jobs data
+            # for each currently running job
+            #======================================
+            done < <(cat "${SM_JOBS_FILE}" | tr "|" " ")
+        fi
+    fi
+
+    #======================================
+    # New msgs in DB to action
+    #======================================
+    if m_read_action "PROCESS_MSG_Q"
+    then
+        #======================================
+        # Query the msgs table for any with a 
+        # status of new and direction of inbound
+        # and then set the action for handler
+        #======================================
+        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Processing  MSG Q" "INFO"
+       
+        SM_MSGS_ID=""/EXECUTE_
+        m_get_msg_q SM_MSGS_ID
+        
+        if [[ "${SM_MSGS_ID}" =~ ^[[:digit:]]+$ ]]  
+        then
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Found msg record in db. ID = (${SM_MSGS_ID})" "INFO"
+            m_get_action_from_msg ${SM_MSGS_ID} SM_ACTION 
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MSG parsed - ACTION = (${SM_ACTION})" "INFO"
+            
+            if [[ "${SM_ACTION}" != "ACK" ]]
+            then
+                #======================================
+                # Set the action flag and payload
+                #======================================
+                m_get_payload_from_msg "${SM_MSGS_ID}" SM_PAYLOAD
+                [[ -n "${SM_PAYLOAD}" ]] || m_fail 2 "Error: Payload expected for msg (${SM_MSGS_ID}) (PROCESS_MSG_Q)" 
+                m_write_action "ACT" "${SM_ACTION}"
+                m_set_action_payload "${SM_PAYLOAD}" "${SM_ACTION}"
+                m_set_action_msg_id "${SM_MSGS_ID}" "${SM_ACTION}"
+                #======================================
+                # Schedule an ACK
+                #======================================
+                m_set_ack ${SM_MSGS_ID} 0
+            else
+                #======================================
+                # Update the originating msg ack field
+                #======================================
+                m_get_msg "${SM_MSGS_ID}" SM_MSG "INBOUND"
+                SM_PAYLOAD=$(echo "${SM_MSG}" | cut -d"|" -f ${M_MSG_PAYLOAD})
+                [[ ${SM_PAYLOAD} =~ ^[[:digit:]]+$ ]] || m_fail 2 "Error: Failed to find payload for msg (${SM_MSGS_ID}) (PROCESS_MSG_Q)" 
+                [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "ACK received for msg (${SM_PAYLOAD})" "INFO"
+                m_update_msgs_table "ack" 0 "msgs_id" "${SM_PAYLOAD}"
+            fi
+        else
+            m_fail 2 "Error: Integer expected for msg id (${SM_MSGS_ID})"
+        fi
+        m_update_msgs_table "status" "PROCESSED" "msgs_id" "${SM_MSGS_ID}"
+        m_write_action "SKIP" "PROCESS_MSG_Q"
+    fi
+
+    #======================================
+    # Check if any ACK's scheduled in ack_ctl
+    #======================================
+    if m_read_action "CHECK_FOR_ACK_TX"
+    then
+        #======================================
+        # Get ack q
+        #======================================
+        m_get_ack_q SM_ACK_Q
+        if [[ -s "${SM_ACK_Q}" ]]
+        then
+            while read SM_MSGS_ID
+            do
+                m_get_msg ${SM_MSGS_ID} SM_MSG "INBOUND"
+                [[ -n ${SM_MSG} ]] || m_fail 2 "Error: Failed to retrieve message with ID (${SM_MSGS_ID}) (CHECK_FOR_ACK_TX)" 
+                SM_MSG_SENDER_ID=$(echo "${SM_MSG}" | cut -d"|" -f ${M_MSG_SENDER_ID})
+                SM_MSG_SENDER=$(echo "${SM_MSG}" | cut -d"|" -f ${M_MSG_SENDER})
+                SM_MSG_THREAD_ID=$(echo "${SM_MSG}" | cut -d"|" -f ${M_MSG_THREAD_ID})
+                m_get_epoch_milliseconds SM_TM
+                m_new_outbound_msg "0" "${SM_TM}" "${SM_MSG_THREAD_ID}" "2" "$(hostname)" "${SM_MSG_SENDER}" "ACK" "${SM_MSG_SENDER_ID}" "OUTBOUND" "NEW" "${M_SESSION_ID}" SM_MID
+                m_inc_thread_id
+                m_update_ack_ctl_table "sent" "${SM_TM}" "msgs_id" "${SM_MSGS_ID}"
+                [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "ACK sent for msg (${SM_MSGS_ID})" "INFO"
+            done < "${SM_ACK_Q}"
+        fi
+        :>"${SM_ACK_Q}"
+    fi
+
+    #======================================
+    # Fatal Error in plugin
+    #======================================
+    if m_read_action "HANDLE_FATAL_ERROR"
+    then
+        m_get_payload_from_state_machine "HANDLE_FATAL_ERROR" SM_MSG
+        #======================================
+        # Attempt to tell the master about it
+        #======================================
+        m_log_msg "PLUGIN - Informing Master of Fatal Error (${SM_MSG})" "ERROR"
+        m_get_epoch_milliseconds SM_TM
+        m_new_outbound_msg "0" "${SM_TM}" "${M_THREAD_ID}" "1" "$(hostname)" "${M_MASTER_HOST}" "HANDLE_FATAL_ERROR" "$(hostname),${SM_MSG}" "OUTBOUND" "NEW" "${M_SESSION_ID}" SM_MID
+        m_inc_thread_id
+        ## Set a timer to check for ack
+        m_set_timer $(( SM_TM + (M_ACK_TO * 1000))) "${SM_MID}" "CHECK_ACK_RECEIVED" "ACT"
+        
+        m_write_action "SKIP" "HANDLE_FATAL_ERROR"
+        m_write_state "TRUE" "ERRORS_OCCURRED"
+    fi
+
+    #======================================
+    # Non fatal error in plugin
+    #======================================
+    if m_read_action "HANDLE_NON_FATAL_ERROR"
+    then
+        m_get_payload_from_state_machine "HANDLE_NON_FATAL_ERROR" SM_MSG
+        #======================================
+        # Attempt to tell the master about it
+        #======================================
+        m_log_msg "PLUGIN - Informing Master of Non Fatal Error (${SM_MSG})" "ERROR"
+        m_get_epoch_milliseconds SM_TM
+        m_new_outbound_msg "0" "${SM_TM}" "${M_THREAD_ID}" "3" "$(hostname)" "${M_MASTER_HOST}" "HANDLE_NON_FATAL_ERROR" "$(hostname),${SM_MSG}" "OUTBOUND" "NEW" "${M_SESSION_ID}" SM_MID
+        m_inc_thread_id
+        ## Set a timer to check for ack
+        m_set_timer $(( SM_TM + (M_ACK_TO * 1000))) "${SM_MID}" "CHECK_ACK_RECEIVED" "ACT"
+        
+        m_write_action "SKIP" "HANDLE_NON_FATAL_ERROR"
+        m_write_state "TRUE" "ERRORS_OCCURRED"
+    fi
+
+    #======================================
+    # Check the in_pending dir for sql dump
+    #======================================
+    if m_read_action "CHECK_FOR_DUMP"
+    then
+        if m_check_dump_in_pending
+        then
+            m_get_epoch_milliseconds SM_TM
+            m_new_outbound_msg "0" "${SM_TM}" "${M_THREAD_ID}" "3" "$(hostname)" "${M_MASTER_HOST}" "REGISTER_DUMP_LOADED" "$(hostname)" "OUTBOUND" "NEW" "${M_SESSION_ID}" SM_MID
+            m_inc_thread_id
+            ## Set a timer to check for ack
+            m_set_timer $(( SM_TM + (M_ACK_TO * 1000))) "${SM_MID}" "CHECK_ACK_RECEIVED" "ACT"
+            
+            m_log_msg "MASTER - Informing Master of table dump load" "INFO"
+
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Dump found in pending directory" "INFO" 
+            m_write_action "SKIP" "CHECK_FOR_DUMP"
+            m_write_state "TRUE" "DUMP_LOADED" 
+        fi
+    fi
+
+    #==============================================================
+    # Persistent Actions
+    #==============================================================
+
+    #======================================
+    # Check the in_pending dir for msgs and
+    # write to msgs table in db
+    #======================================
+    if m_read_action "CHECK_MSGS"
+    then
+        if m_check_msgs_in_pending
+        then
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MSGS found in pending directory" "INFO" 
+            m_write_action "ACT" "PROCESS_MSG_Q"
+        fi
+    fi
+    
+    #======================================
+    # Check the timer table for expired timers
+    #======================================
+    if m_read_action "CHECK_TIMERS"
+    then
+
+        m_get_expired_timers SM_EXPIRED_TIMERS
+        if [[ -s ${SM_EXPIRED_TIMERS} ]]
+        then
+            while read SM_LINE
+            do
+                #======================================
+                # Set the actions for the expired timer
+                #======================================
+                SM_ACTION=$(echo ${SM_LINE} | cut -d"|" -f ${C_TIMER_ACTION})
+                SM_TID=$(echo ${SM_LINE} | cut -d"|" -f ${C_TIMER_ID})
+                SM_PAYLOAD=$(echo ${SM_LINE} | cut -d"|" -f ${C_TIMER_PAYLOAD})
+                m_get_action_from_state_machine "${SM_ACTION}" SM_STATE
+                [[ (${SM_STATE} == "ACT") || (${SM_STATE} == "SKIP") ]] || m_fail 2 "Error: Action recovered (${SM_LINE}) not found in DB (CHECK_TIMERS)"
+                m_set_action_payload "${SM_PAYLOAD}" "${SM_ACTION}"
+                m_write_action "ACT" "${SM_ACTION}"
+                #======================================
+                # Cancel the expired timer
+                #======================================
+                m_update_timer_table "is_set" 1 "timer_id" "${SM_TID}"
+            done < "${SM_EXPIRED_TIMERS}"
+        fi
+    fi
+
+
+    #======================================
+    # Have we been told to stop?
+    #======================================
+    if m_read_action "CHECK_CTL_FILE"
+    then
+        if grep "stop" "${M_MUSE_CTL_FILE}" > /dev/null 2>&1
+        then
+            m_write_action "ACT" "STOP_MUSE"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Stop detected in control file (${M_MUSE_CTL_FILE})" "INFO" 
+        fi
+    fi
+    
+    #======================================
+    # Shutdown actions TODO extend
+    #======================================
+    if m_read_action "STOP_MUSE"
+    then
+        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Action = STOP_MUSE. Stopping" "INFO" 
+        break
+    fi
+    
+    if m_read_action "SHUTDOWN_MUSE"
+    then
+        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Action = SHUTDOWN_MUSE. Shutting down" "INFO" 
+        ## TODO Set actions to confirm all processes are complete before exiting
+        break
+    fi
+
+done
+
+[[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "All processes complete. Exiting" "INFO"
+
+if m_read_state "ERRORS_OCCURRED"
+then
+    exit 1
+else
+    exit 0
+fi
