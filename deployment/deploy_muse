@@ -87,7 +87,7 @@ export MU_START_DIR=$(pwd)
 export SELF_ROOT="$(cd $(dirname "$0");pwd)"
 cd "${SELF_ROOT}" || die "Failed to cd to (${SELF_ROOT})"
 
-DEFAULTS="${SELF_ROOT}/defaults.env"
+DEFAULTS="${SELF_ROOT}/deploy.env"
 [[ -r "${DEFAULTS}" ]] || die "Default environment (${DEFAULTS}) not found"
 source "${DEFAULTS}" || die "Failed to source default environment (${DEFAULTS})"
 

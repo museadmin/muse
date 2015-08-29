@@ -45,7 +45,7 @@ get_hosts_for_cluster()
     # Need MUSE defaults to read hosts 
     #======================================
     local DEFS="${MUSE_ROOT}/user/defaults.env"
-    [[ -r "${DEFS}" ]] || die "Failed to find readable user defaults (${DEFS})"
+    [[ -r "${DEFS}" ]] || die "Failed to find readable user environement (${DEFS})"
     source "${DEFS}" || die "Failed to source (${DEFS})"
     
     #======================================
@@ -116,7 +116,7 @@ get_host_from_cluster()
     # Need MUSE defaults to read hosts 
     #======================================
     local DEFS="${MUSE_ROOT}/user/defaults.env"
-    [[ -r "${DEFS}" ]] || die "Failed to find readable user defaults (${DEFS})"
+    [[ -r "${DEFS}" ]] || die "Failed to find readable user environment (${DEFS})"
     source "${DEFS}" || die "Failed to source (${DEFS})"
     
     #======================================
@@ -178,7 +178,7 @@ get_clusters_from_hosts()
     # Need MUSE defaults to read hosts 
     #======================================
     local DEFS="${MUSE_ROOT}/user/defaults.env"
-    [[ -r "${DEFS}" ]] || die "Failed to find readable user defaults (${DEFS})"
+    [[ -r "${DEFS}" ]] || die "Failed to find readable user environment (${DEFS})"
     source "${DEFS}" || die "Failed to source (${DEFS})"
     
     #======================================
