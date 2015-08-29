@@ -371,7 +371,6 @@ do
                 [[ ${SM_MD5SUM} == $(md5sum ${SM_PLUGIN_FQN} | cut -d" " -f1) ]] || m_fail 2 "Error: Plugin (${SM_PLUGIN_NAME}) failed md5sum check. (EXECUTE_PLUGIN)" 
                 [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Plugin (${SM_PLUGIN_NAME}) survived md5sum check. " "INFO"
             fi
-            ## TODO Parse and check in master-user's groups
 
             #======================================
             # All validated so launch and record
@@ -446,65 +445,73 @@ do
     #======================================
     if m_read_action "CHECK_FOR_COMPLETED_JOBS"
     then
-        if m_get_running_jobs SM_JOB_DETAILS
+        if m_get_running_jobs SM_JOBS_FILE
         then
-            SM_JOB_ID=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f1)
-            SM_PID=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f2)
-            SM_JOB_NAME=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f3)
-            SM_MASTER_EXEC_ID=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f4)
-            SM_THREAD_ID=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f5)
-            
-            if [[ -z $(ps -ef | grep ${SM_PID} | grep ${SM_JOB_NAME} | grep -v grep | grep -v "Done") ]]
-            then
-                [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Completed job found (${SM_JOB_DETAILS})" "INFO"
-
-                #======================================
-                # Inform the master that a job has
-                # completed and also send the report
-                #======================================
+            #======================================
+            # Loop over each job in file
+            #======================================
+            while read SM_JOB_ID SM_PID SM_JOB_NAME SM_MASTER_EXEC_ID SM_THREAD_ID
+            do
+                SM_JOB_DETAILS="${SM_JOB_ID}|${SM_PID}|${SM_JOB_NAME}|${SM_MASTER_EXEC_ID}|${SM_THREAD_ID}"
+                #SM_JOB_ID=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f1)
+                #SM_PID=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f2)
+                #SM_JOB_NAME=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f3)
+                #SM_MASTER_EXEC_ID=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f4)
+                #SM_THREAD_ID=$(echo ${SM_JOB_DETAILS} | cut -d"|" -f5)
                 
-                #======================================
-                # Update the job finish time in db
-                #======================================
-                m_get_epoch_milliseconds SM_TM
-                m_update_job_table "${SM_JOB_ID}" "finish_time" "${SM_TM}"
-
-                #======================================
-                # Add a footer to report
-                #======================================
-                m_get_job_data "${SM_JOB_ID}" "report" SM_PLUGIN_REPORT
-                m_print_results_trailer "$(date +"%H:%M:%S")" "${SM_PLUGIN_REPORT}"
-
-                #======================================
-                # Send the report to the master
-                #======================================
-                SM_CNXN="${M_CNXN_DIR}/${M_MSG_USR}@${M_MASTER_HOST}:22"
-                cat "${SM_PLUGIN_REPORT}" | ssh -S "${SM_CNXN}" ${M_MSG_USR}@${M_MASTER_HOST} "${M_MASTER_REPORTS}/$(hostname).${SM_PLUGIN_REPORT##*/}"
-                echo "Report md5sum" | ssh -S "${SM_CNXN}" ${M_MSG_USR}@${M_MASTER_HOST} "${M_MASTER_REPORTS}/$(hostname).${SM_PLUGIN_REPORT##*/}.${M_MSG_OK}"
-                
-                #======================================
-                # Tell the master
-                #======================================
-                [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Informing master of completed job (${SM_JOB_NAME})" "INFO"
-                m_new_outbound_msg "0" "${SM_TM}" "${SM_THREAD_ID}" "3" "$(hostname)" "${M_MASTER_HOST}" "REGISTER_PLUGIN_COMPLETE" "${SM_MASTER_EXEC_ID},${SM_TM},${SM_JOB_NAME}" "OUTBOUND" "NEW" "${M_SESSION_ID}" SM_MID
-                m_inc_thread_id
-
-                #======================================
-                # Check for reported errors in plugin
-                #======================================
-                SM_PLUGIN_CTL="${M_PLUGIN_CTL}/${SM_MASTER_EXEC_ID}_${SM_JOB_NAME}.ctl"
-                if grep "HANDLE_FATAL_ERROR" "${SM_PLUGIN_CTL}"
+                if [[ -z $(ps -ef | grep ${SM_PID} | grep ${SM_JOB_NAME} | grep -v grep | grep -v "Done") ]]
                 then
-                    m_log_msg "Fatal Error reported by plugin (${SM_JOB_NAME})" "ERROR"
-                    m_set_action_payload "$(cat ${SM_PLUGIN_CTL} | cut -d"|" -f 2)" "HANDLE_FATAL_ERROR"
-                    m_write_action "ACT" "HANDLE_FATAL_ERROR"
-                elif grep "HANDLE_NON_FATAL_ERROR" "${SM_PLUGIN_CTL}"
-                then
-                    m_log_msg "Non fatal Error reported by plugin (${SM_JOB_NAME})" "ERROR"
-                    m_set_action_payload "$(cat ${SM_PLUGIN_CTL} | cut -d"|" -f 2)" "HANDLE_NON_FATAL_ERROR"
-                    m_write_action "ACT" "HANDLE_NON_FATAL_ERROR"
+                    [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Completed job found (${SM_JOB_DETAILS})" "INFO"
+                    #======================================
+                    # Inform the master that a job has
+                    # completed and also send the report
+                    #======================================
+                    
+                    #======================================
+                    # Update the job finish time in db
+                    #======================================
+                    m_get_epoch_milliseconds SM_TM
+                    m_update_job_table "${SM_JOB_ID}" "finish_time" "${SM_TM}"
+                    #======================================
+                    # Add a footer to report
+                    #======================================
+                    m_get_job_data "${SM_JOB_ID}" "report" SM_PLUGIN_REPORT
+                    m_print_results_trailer "$(date +"%H:%M:%S")" "${SM_PLUGIN_REPORT}"
+                    #======================================
+                    # Send the report to the master
+                    #======================================
+                    # TODO parameterise port
+                    SM_CNXN="${M_CNXN_DIR}/${M_MSG_USR}@${M_MASTER_HOST}:22"
+                    cat "${SM_PLUGIN_REPORT}" | ssh -S "${SM_CNXN}" ${M_MSG_USR}@${M_MASTER_HOST} "${M_MASTER_REPORTS}/$(hostname).${SM_PLUGIN_REPORT##*/}"
+                    echo "Report md5sum" | ssh -S "${SM_CNXN}" ${M_MSG_USR}@${M_MASTER_HOST} "${M_MASTER_REPORTS}/$(hostname).${SM_PLUGIN_REPORT##*/}.${M_MSG_OK}"
+                    #======================================
+                    # Tell the master
+                    #======================================
+                    [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "Informing master of completed job (${SM_JOB_NAME})" "INFO"
+                    m_new_outbound_msg "0" "${SM_TM}" "${SM_THREAD_ID}" "3" "$(hostname)" "${M_MASTER_HOST}" "REGISTER_PLUGIN_COMPLETE" \
+                        "${SM_MASTER_EXEC_ID},${SM_TM},${SM_JOB_NAME}" "OUTBOUND" "NEW" "${M_SESSION_ID}" SM_MID
+                    m_inc_thread_id
+                    #======================================
+                    # Check for reported errors in plugin
+                    #======================================
+                    SM_PLUGIN_CTL="${M_PLUGIN_CTL}/${SM_MASTER_EXEC_ID}_${SM_JOB_NAME}.ctl"
+                    if grep "HANDLE_FATAL_ERROR" "${SM_PLUGIN_CTL}"
+                    then
+                        m_log_msg "Fatal Error reported by plugin (${SM_JOB_NAME})" "ERROR"
+                        m_set_action_payload "$(cat ${SM_PLUGIN_CTL} | cut -d"|" -f 2)" "HANDLE_FATAL_ERROR"
+                        m_write_action "ACT" "HANDLE_FATAL_ERROR"
+                    elif grep "HANDLE_NON_FATAL_ERROR" "${SM_PLUGIN_CTL}"
+                    then
+                        m_log_msg "Non fatal Error reported by plugin (${SM_JOB_NAME})" "ERROR"
+                        m_set_action_payload "$(cat ${SM_PLUGIN_CTL} | cut -d"|" -f 2)" "HANDLE_NON_FATAL_ERROR"
+                        m_write_action "ACT" "HANDLE_NON_FATAL_ERROR"
+                    fi
                 fi
-            fi
+            #======================================
+            # Loop reads each line of jobs data
+            # for each currently running job
+            #======================================
+            done < <(cat "${SM_JOBS_FILE}" | tr "|" " ")
         fi
     fi
 

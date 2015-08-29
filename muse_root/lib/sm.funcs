@@ -218,7 +218,7 @@ m_get_running_jobs()
     then
         if [[ $(head -n 1 "${RUNNING_JOBS}" | awk '{print NF}' FS="|") -eq 5 ]]
         then
-            eval ${1}=\"$(head -n 1 "${RUNNING_JOBS}")\"
+            eval ${1}=\"${RUNNING_JOBS}\"
             return 0
         else
             m_fail 2 "Error: Incorrect field count for query result ($(head -n 1 ${RUNNING_JOBS})).  (${FUNCNAME})" 
