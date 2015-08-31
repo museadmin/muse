@@ -1368,7 +1368,12 @@ m_expand_suite()
         #======================================
         # Look for WAIT on line
         #======================================
-        m_check_wait TMP ${LINE} && WAIT=0 
+        WAIT_FOUND=false
+        if m_check_wait TMP ${LINE} 
+        then
+            WAIT_FOUND=true
+            WAIT=0
+        fi
         LINE=${TMP}
         #======================================
         # Single job on line or multiple?
@@ -1430,13 +1435,22 @@ m_expand_suite()
                 [[ -n ${G_HOSTS} ]] || m_fail 2 "Error: Host retrieval from plugin (${JOB}) (${FUNCNAME})" 
                 #======================================
                 # Implicit BG group if multiple hosts
-                # resolved from header JOB_HOST
+                # resolved from header JOB_HOST.
                 #======================================
                 if [[ $(echo ${G_HOSTS} | wc -w) -gt 1 ]] 
                 then
                     m_get_next_grp_id GRP_ID 
                     BG=0
-                    WAIT=0
+                    #======================================
+                    # Check if user put a WAIT on implicit
+                    # BG group
+                    #======================================
+                    if ! "${WAIT_FOUND}"
+                    then
+                        WAIT=1
+                    else
+                        WAIT=0
+                    fi
                 fi
 
                 for JOB_HOST in ${G_HOSTS}

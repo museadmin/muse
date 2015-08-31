@@ -1041,24 +1041,12 @@ do
     #======================================
     if m_read_action "CHECK_FOR_NEW_REPORTS"
     then
-         if m_check_for_rpts_in_buffer SM_REPORT
-         then
+        while m_check_for_rpts_in_buffer SM_REPORT
+        do
             [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Report found in buffer (${SM_REPORT})"  "INFO"
-            m_set_action_payload "${SM_REPORT}" "PROCESS_NEW_REPORT"
-            m_write_action "ACT" "PROCESS_NEW_REPORT"
-         fi
-    fi
-
-    #======================================
-    # Process a newly arrived report
-    #======================================
-    if m_read_action "PROCESS_NEW_REPORT"
-    then
-        # TODO Parse the report, update summaries, update screen
-        m_get_payload_from_state_machine "PROCESS_NEW_REPORT" SM_REPORT
-        [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Processing Report (${SM_REPORT})"  "INFO"
-        m_parse_report "${SM_REPORT}"
-        m_write_action "SKIP" "PROCESS_NEW_REPORT"
+            m_parse_report "${SM_REPORT}"
+            [[ ${M_LOG_LEVEL} == "DEBUG" ]] && m_log_msg "MASTER - Processed Report Successfully (${SM_REPORT})"  "INFO"
+        done
     fi
 
     #==============================================================
