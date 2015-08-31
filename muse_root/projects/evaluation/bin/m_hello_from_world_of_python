@@ -16,7 +16,7 @@
 ##############################################################
 SCRIPT_NAME=m_hello_from_world_of_python
 
-m_find_file hello.py HELLO || m_fail 1 "Error: Call to m_find_file failed. (${FUNCNAME})" 
+m_find_file hello.py HELLO || m_fail 1 "Error: Call to m_find_file failed. (${SCRIPT_NAME})" 
 
 python "${HELLO}" || m_fail 1 "Error: Call to hello.py failed (${SCRIPT_NAME})" 
 
