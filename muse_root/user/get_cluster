@@ -6,11 +6,11 @@
 ## Description  :   User defined file should return the cluster
 ##                  name on stdout. Or if deployer has set env
 ##                  var PRIME_GET_CLUSTER=true, deployer will 
-##                  write cluster name to t30.odd.blackspider.com tag
+##                  write cluster name to demo tag
 ## Date         :   18/07/2015
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
 ##                  Released    [n]
 ##############################################################
 
-echo "t30.odd.blackspider.com"
+echo "demo"

@@ -300,8 +300,24 @@ create_ssh_cfg()
             printf "%s\n" "UserKnownHostsFile=${SSH_KNOWN_HSTS}" >> "${1}"
             ;;
         2)
+            #======================================
+            # 
+            #======================================
             ;;
         3)
+            #======================================
+            # Assumes no firewall. Direct connection
+            #======================================
+            printf "%s\n" "Host *" >> "${1}"
+            printf "%s\n" "SendEnv LANG LC_*" >> "${1}"
+            printf "%s\n" "HashKnownHosts yes" >> "${1}"
+            printf "%s\n" "GSSAPIAuthentication yes" >> "${1}"
+            printf "%s\n" "GSSAPIDelegateCredentials no" >> "${1}"
+            printf "%s\n" "ServerAliveInterval ${SSH_INTVL}" >> "${1}"
+            printf "%s\n" "ForwardAgent ${SSH_FWD}" >> "${1}"
+            printf "%s\n" "StrictHostKeyChecking ${SSH_KEY_CHK}" >> "${1}"
+            printf "%s\n" "UserKnownHostsFile=${SSH_KNOWN_HSTS}" >> "${1}"
+            printf "%s\n\n" "IdentityFile ${SSH_DEP_KEY}" >> "${1}"
             ;;
     esac
 
@@ -321,7 +337,7 @@ deploy_muse_to_cluster()
 {
     [[ $# -eq 1 ]] || die "Usage. Arg count. 1 expected (${FUNCNAME})"
     [[ -n ${1} ]] || die "Usage. Arg[1]. Cluster name expected (${FUNCNAME})"
-    local THIS_CLUSTER="${1}"
+    local THIS_CLUSTER="${1}" THIS_IP=
 
     #======================================
     # Set get_cluster to echo name?
@@ -352,9 +368,13 @@ deploy_muse_to_cluster()
     for THOST in ${DHOSTS}
     do
         echo "${THOST}"
-        scp -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_DEP_CFG}" "${SELF_ROOT}/${MUSE_TAR}" "${THOST}:." >/dev/null 2>&1 || die "SCP failed for host ${THOST}"
-        scp -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_DEP_CFG}" "${SELF_ROOT}/install_muse" "${THOST}:." >/dev/null 2>&1 || die "SCP failed for host ${THOST}"
-        ssh -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_INS_CFG}" "${THOST}" "cd ~${SSH_DEP_USR};./install_muse" >/dev/null 2>&1 || die "Install failed for host ${THOST}"
+        get_ip_for_host "${THIS_CLUSTER}" "${THOST}" THIS_IP
+        scp -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_DEP_CFG}" "${SELF_ROOT}/${MUSE_TAR}" "${SSH_DEP_USR}@${THIS_IP}:." >/dev/null 2>&1 || 
+            die "SCP failed for host ${THOST}"
+        scp -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_DEP_CFG}" "${SELF_ROOT}/install_muse" "${SSH_DEP_USR}@${THIS_IP}:." >/dev/null 2>&1 || 
+            die "SCP failed for host ${THOST}"
+        ssh -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_INS_CFG}" "${THOST}" "cd ~${SSH_DEP_USR};sudo ./install_muse" >/dev/null 2>&1 || 
+            die "Install failed for host ${THOST}"
     done
 
     #======================================
@@ -366,4 +386,67 @@ deploy_muse_to_cluster()
         [[ -f "${SELF_ROOT}/${SSH_INS_CFG}" ]] && rm -f "${SELF_ROOT}/${SSH_INS_CFG}"
         [[ -f "${SELF_ROOT}/${MUSE_TAR}" ]] && rm -f "${SELF_ROOT}/${MUSE_TAR}"
     fi
+}
+##############################################################
+##
+## Name         :   get_ip_for_host
+## Author       :   Bradley Atkins
+## Description  :   Return the IP address for a host from 
+##                  muse.hosts
+## Date         :   28/10/2015
+## Args         :   1 - Cluster name
+##                  2 - FQ Name of host
+##                  3 - Return Var Name
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+get_ip_for_host()
+{
+    
+    #======================================
+    # Validate
+    #======================================
+    [[ -d "${MUSE_ROOT}" ]] || die "MUSE_ROOT not set (${FUNCNAME})" "ERROR"
+    [[ $# -eq 3 ]] || die "Usage. Arg count. 3 expected"
+    [[ -n "${1}" ]] || die "Usage. Arg[1]. Cluster name expected (${FUNCNAME})"
+    [[ -n "${2}" ]] || die "Usage arg[2]. FQNAME or SNAME expected (${FUNCNAME})"
+    [[ -n "${3}" ]] || die "Usage. Arg[3]. Variable name expected (${FUNCNAME})"
+
+    #======================================
+    # Find the hosts file for MUSE
+    #======================================
+    local MHOSTS="${MUSE_ROOT}/user/muse.hosts"
+    [[ -r "${MHOSTS}" ]] || die "Failed to find readable muse.hosts file below (${MUSE_ROOT}) (${FUNCNAME})"
+    
+    #======================================
+    # Need MUSE defaults to read hosts 
+    #======================================
+    local DEFS="${MUSE_ROOT}/user/defaults.env"
+    [[ -r "${DEFS}" ]] || die "Failed to find readable user environment (${DEFS})"
+    source "${DEFS}" || die "Failed to source (${DEFS})"
+    
+    #======================================
+    # Pull out all of the names for cluster
+    #======================================
+    [[ (-n ${HOSTS_DELIMITER}) && (-n ${COLUMN_ORDER}) ]] || die 1 "Hosts env vars not set (${FUNCNAME})"
+
+    local OLDIFS="${IFS}" STR=""
+    IFS="${HOSTS_DELIMITER}"
+
+    while eval read ${COLUMN_ORDER}
+    do
+        if [[ "${CLUSTER}" == *"${1}"* ]]
+        then
+            if [[ "${FQNAME}" == "${2}" ]]
+            then
+                STR="${IP}"
+                break
+            fi
+        fi
+    done < <(sed 's/[#].*$//g' "${MHOSTS}" | awk NF)
+   
+    IFS="${OLDIFS}"
+
+    eval ${3}="${STR}"
 }
