@@ -3,7 +3,9 @@
 ## Name         :   muse_setup
 ## Author       :   Bradley Atkins
 ## Description  :   Create the users and sudo permissions
-##                  required to install and run MUSE
+##                  required to install and run MUSE. Also
+##                  configure ssh config. Must run on each node
+##                  as root.
 ## Date         :   28/10/2015
 ## Status       :   Reviewed    [n]
 ##                  Tested      [n]
@@ -32,12 +34,53 @@ then
     fi
 fi
 #======================================
-# Do we have a sysadmin group?
+# Create the MUSE groups
 #======================================
-if ! cat /etc/group | grep sysadmin >/dev/null 2>&1
+for GRP in sysadmin musedev museadmin museusr
+do
+    if ! cat /etc/group | grep "${GRP}" >/dev/null 2>&1
+    then
+        groupadd "${GRP}" || die "failed to create group (${GRP})"
+    fi
+done
+
+#======================================
+# User musemaster
+#======================================
+USR="musemaster"
+KEY="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDSKqwvhbzYGbQo6d4imM25UE1y3nCh/OrO0Iq2NGQKYIYlGNsj++Nzr9h4wPDhfQePk7gIVs4t10WNON9hxWQH0lSUsMrjyorF8JdJdemiLnmO/wGePeKQleJc4uaBSVrLJzSbxhQl6MVRwmmHL0gXqX/CnOe1KCauveZ5tGE+kaFirsZoa56I95/AiYrjab0BASM2AoPHVcz4kbflE4VVLpgPQ5nkgLZi101lGcW0KfxHOr/h5siZY7CJKqAo0aCbDK8MtW/SNE1jt7QMrYGYqWrAqG67y/g3ZGTgH3YEt18Q0/s23ZnLPdfMNqoPG9231lCcyRnvkadagEIwaZNT batkins@al-car-06179.local"
+
+#======================================
+# re/create user 
+#======================================
+if id ${USR} >/dev/null 2>&1
 then
-    groupadd sysadmin
+    userdel -r ${USR} || die "Failed to delete user (${USR})"
 fi
+useradd -c "MUSE master user" -m -G musedev,museadmin ${USR} || die 1 "Failed to create user ${USR}"
+
+MDHOME=$(eval echo ~${USR})
+[[ -d ${MDHOME} ]] || die "useradd failed to create home dir for ${USR}"
+[[ -d ${MDHOME}/.ssh ]] || mkdir ${MDHOME}/.ssh || 
+    die "Useradd cmd failed to create ssh dir for ${USR}" 
+chown "${USR}":"${USR}" "${MDHOME}/.ssh"
+
+#======================================
+# Do we need to add key for user
+#======================================
+if ! grep "${KEY}" ${MDHOME}/.ssh/authorized_keys >/dev/null 2>&1
+then
+    ## Add user to authorized_keys
+    echo "${KEY}" >> ${MDHOME}/.ssh/authorized_keys || 
+        die "Failed to set authorized key for ${USR}"
+fi
+#======================================
+# Set permissions for authorized_keys
+#======================================
+chmod 600 ${MDHOME}/.ssh/authorized_keys || 
+    die "Failed to set permissions for authorized keys for ${USR}"
+chown ${USR}:${USR} ${MDHOME}/.ssh/authorized_keys || 
+    die "Failed to set ownership of ${MDHOME}/.ssh/authorized_keys"
 
 
 #======================================
@@ -81,7 +124,7 @@ chown ${USR}:${USR} ${MDHOME}/.ssh/authorized_keys ||
 # User museslave
 #======================================
 USR="museslave"
-KEY='command="nohup /usr/local/bin/muse_root/slave/system/slave ${SSH_ORIGINAL_COMMAND} /dev/null 2>&1 </dev/null &",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDCw4JjUPvqGHCplYWODuDzdk/IjQS2MReK+zxKjlqEXrRrUhj42A0MIA0mzjUmWfZIdT84+9Z6xklmQeTJc96rXAiyfP4xEjwVQmGI5y6LVoluHDqkuwwe1bBF/45WLfzTRHqx6qK28rRNz8ymfbdltuh05DRBLNtJtpAz498bYVkMWUZCHgxzUocNA312R7aZHTHAZQ7Hj001IJfpaSt1QZXv1fv8zGCjVDEWWRIhlP2JVFQv1VLxuv6QUsnhRkHPG9Mx+p9UWCRjbKDWdBlE162I4jkgIZJOtgeMJMCPRfkbASnt6fIKsUo/Qh66YYjHK4tuLYo9rczpuYkUnugl batkins@al-car-06179.local'
+KEY='command="nohup /usr/local/bin/muse_root/slave/system/slave ${SSH_ORIGINAL_COMMAND} /dev/null 2>&1 </dev/null &",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDSKqwvhbzYGbQo6d4imM25UE1y3nCh/OrO0Iq2NGQKYIYlGNsj++Nzr9h4wPDhfQePk7gIVs4t10WNON9hxWQH0lSUsMrjyorF8JdJdemiLnmO/wGePeKQleJc4uaBSVrLJzSbxhQl6MVRwmmHL0gXqX/CnOe1KCauveZ5tGE+kaFirsZoa56I95/AiYrjab0BASM2AoPHVcz4kbflE4VVLpgPQ5nkgLZi101lGcW0KfxHOr/h5siZY7CJKqAo0aCbDK8MtW/SNE1jt7QMrYGYqWrAqG67y/g3ZGTgH3YEt18Q0/s23ZnLPdfMNqoPG9231lCcyRnvkadagEIwaZNT batkins@al-car-06179.local'
 
 #======================================
 # re/create user 
@@ -118,7 +161,7 @@ chown ${USR}:${USR} ${MDHOME}/.ssh/authorized_keys ||
 # User musemsg
 #======================================
 USR="musemsg"
-KEY='command="cat >> ${SSH_ORIGINAL_COMMAND}",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7S5+j2awxdLXpelzxj2FftZvEijfaMrXJoN1eE21R0zDQp13Hn1BXoQFn6qtWs7vhztnaS7rd5FFiGQw5WSTeRs4+bIbSHZv1ddMjVOGb+2Cimg/Y0q8oV/NPJVdE1CezRePOEcs6entfQeDxcAybb/nb7yjcN1rqzg/KSUzG5bokIQ1zJ5vj+8ZtyMXiozBgyhdCIeOUEEdagVqvEIelXxCrHz/6Z4MwSN5jhSu6ghAjX9nssnr4cUXTTr+TjbRuPOYqAAx3IXWtQYnI+1Zjp7SeYkiguq+2n9m3EmuqU97y9GorioMWvBAB3PRhr3dM+wlj39g1rArG76PEQmc1 batkins@al-car-06179.local'
+KEY='command="cat >> ${SSH_ORIGINAL_COMMAND}",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDSKqwvhbzYGbQo6d4imM25UE1y3nCh/OrO0Iq2NGQKYIYlGNsj++Nzr9h4wPDhfQePk7gIVs4t10WNON9hxWQH0lSUsMrjyorF8JdJdemiLnmO/wGePeKQleJc4uaBSVrLJzSbxhQl6MVRwmmHL0gXqX/CnOe1KCauveZ5tGE+kaFirsZoa56I95/AiYrjab0BASM2AoPHVcz4kbflE4VVLpgPQ5nkgLZi101lGcW0KfxHOr/h5siZY7CJKqAo0aCbDK8MtW/SNE1jt7QMrYGYqWrAqG67y/g3ZGTgH3YEt18Q0/s23ZnLPdfMNqoPG9231lCcyRnvkadagEIwaZNT batkins@al-car-06179.local'
 
 #======================================
 # re/create user 
@@ -127,7 +170,7 @@ if id ${USR} >/dev/null 2>&1
 then
     userdel -r ${USR} || die "Failed to delete user (${USR})"
 fi
-useradd -c "MUSE slave user" -m ${USR} || die 1 "Failed to create user ${USR}"
+useradd -c "MUSE messaging service user" -m ${USR} || die 1 "Failed to create user ${USR}"
 
 MDHOME=$(eval echo ~${USR})
 [[ -d ${MDHOME} ]] || die "useradd failed to create home dir for ${USR}"
@@ -150,3 +193,19 @@ chmod 600 ${MDHOME}/.ssh/authorized_keys ||
 chown ${USR}:${USR} ${MDHOME}/.ssh/authorized_keys || 
     die "Failed to set ownership of ${MDHOME}/.ssh/authorized_keys"
 
+#======================================
+# Set the ssh config 
+#======================================
+[[ -r /etc/ssh/ssh_config ]] || die "Failed to find ssh_config file"
+if grep "ForwardAgent" /etc/ssh/ssh_config >/dev/null 2>&1
+then
+    sed -i 's/.*ForwardAgent.*/ForwardAgent yes/' /etc/ssh/ssh_config || die "Failed to set agent forwarding"
+else
+    echo "ForwardAgent yes" >> /etc/ssh/ssh_config
+fi
+if grep "ServerAliveInterval" /etc/ssh/ssh_config >/dev/null 2>&1
+then
+    sed -i 's/.*ServerAliveInterval.*/ServerAliveInterval 5/' /etc/ssh/ssh_config || die "Failed to set ssh keepalive"
+else
+    echo "ServerAliveInterval 5" >> /etc/ssh/ssh_config || die "Failed to set ssh keepalive"
+fi

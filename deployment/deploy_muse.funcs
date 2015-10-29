@@ -373,7 +373,7 @@ deploy_muse_to_cluster()
             die "SCP failed for host ${THOST}"
         scp -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_DEP_CFG}" "${SELF_ROOT}/install_muse" "${SSH_DEP_USR}@${THIS_IP}:." >/dev/null 2>&1 || 
             die "SCP failed for host ${THOST}"
-        ssh -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_INS_CFG}" "${THOST}" "cd ~${SSH_DEP_USR};sudo ./install_muse" >/dev/null 2>&1 || 
+        ssh -o StrictHostKeyChecking=no -F "${SELF_ROOT}/${SSH_INS_CFG}" "${SSH_DEP_USR}@${THIS_IP}" "cd ~${SSH_DEP_USR};sudo ./install_muse" >/dev/null 2>&1 || 
             die "Install failed for host ${THOST}"
     done
 

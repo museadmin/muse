@@ -12,26 +12,29 @@
 ##
 ##
 ##############################################################
-error_exit()
+die()
 {
     echo "###################################"
-    echo "Error: $(date):$1"
+    echo "Error: $(date): $1"
     echo "###################################"
     exit 1
 } > /tmp/muse_install.log
 
+## User running muse
+MUSE_MASTER=musemaster
+MASTER_HOME=$(eval echo ~musemaster)
 
 if [[ -f muse.tar ]]
 then
     #======================================
     # Remove existing and untar new
     #======================================
-    sudo cp muse.tar /usr/local/bin || error_exit "Copy failed for muse.tar"
-    cd /usr/local/bin || error_exit "cd failed to /usr/local/bin"
+    sudo cp muse.tar /usr/local/bin || die "Copy failed for muse.tar"
+    cd /usr/local/bin || die "cd failed to /usr/local/bin"
     [[ -d muse_root ]] && sudo rm -rf muse_root
-    [[ -d muse_root ]]  && error_exit "Failed to delete existing root"
-    sudo tar xvf muse.tar || error_exit "Untar failed for /usr/local/bin/muse.tar"
-    sudo chown -R mailcontrol:mailcontrol /usr/local/bin/muse_root || error_exit "chown for muse root failed"
+    [[ -d muse_root ]]  && die "Failed to delete existing root"
+    sudo tar xvf muse.tar || die "Untar failed for /usr/local/bin/muse.tar"
+    sudo chown -R "${MUSE_MASTER}":"${MUSE_MASTER}" /usr/local/bin/muse_root || die "chown for muse root failed"
     
     [[ -f  /usr/local/bin/muse.tar ]] && sudo rm -f /usr/local/bin/muse.tar
 
@@ -40,20 +43,20 @@ then
     #======================================
     [[ -L /usr/local/bin/muse ]] && sudo rm -f /usr/local/bin/muse
     [[ -L /usr/local/bin/slave ]] && sudo rm -f /usr/local/bin/slave
-    #sudo ln -s /usr/local/bin/muse_root/system/muse /usr/local/bin/muse  || error_exit "Failed to create soft link"
-    sudo ln -s /usr/local/bin/muse_root/master/system/master /usr/local/bin/muse  || error_exit "Failed to create soft link"
-    sudo ln -s /usr/local/bin/muse_root/slave/system/slave /usr/local/bin/slave  || error_exit "Failed to create soft link"
-    #sudo chown -R mailcontrol:mailcontrol /usr/local/bin/muse || error_exit "chown for soft link failed"
+    #sudo ln -s /usr/local/bin/muse_root/system/muse /usr/local/bin/muse  || die "Failed to create soft link"
+    sudo ln -s /usr/local/bin/muse_root/master/system/master /usr/local/bin/muse  || die "Failed to create soft link"
+    sudo ln -s /usr/local/bin/muse_root/slave/system/slave /usr/local/bin/slave  || die "Failed to create soft link"
+    #sudo chown -R "${MUSE_MASTER}":"${MUSE_MASTER}" /usr/local/bin/muse || die "chown for soft link failed"
 
     #======================================
     # DEV directory
     #======================================
-    sudo mkdir -p ~mailcontrol/.muse_dev || error_exit "failed to create muse_dev"
-    sudo chown mailcontrol:mailcontrol ~mailcontrol/.muse_dev || error_exit "Chown 3 failed"
+    sudo mkdir -p "${MASTER_HOME}"/.muse_dev || die "failed to create muse_dev"
+    sudo chown "${MUSE_MASTER}":"${MUSE_MASTER}" "${MASTER_HOME}"/.muse_dev || die "Chown 3 failed"
 
     ## TODO deprecate in favour of M_ROOT/environment
-    sudo mkdir -p ~mailcontrol/muse_run_environment || error_exit "failed to create muse_run_environment"
-    sudo chown mailcontrol:mailcontrol ~mailcontrol/muse_run_environment || error_exit "Chown 4 failed"
+    sudo mkdir -p "${MASTER_HOME}"/muse_run_environment || die "failed to create muse_run_environment"
+    sudo chown "${MUSE_MASTER}":"${MUSE_MASTER}" "${MASTER_HOME}"/muse_run_environment || die "Chown 4 failed"
 
     #======================================
     # VIM RAD tools
@@ -64,69 +67,71 @@ then
     ## Install custom vimrc
     if [[ -f "${VIMRC}" ]] 
     then
-        if [[ -d ~mailcontrol/.muse_dev ]]
+        if [[ -d "${MASTER_HOME}"/.muse_dev ]]
         then
-            for d in $(find ~mailcontrol/.muse_dev -type d)
+            for d in $(find "${MASTER_HOME}"/.muse_dev -type d)
             do
-                sudo cp "${VIMRC}" ${d} || error_exit "Copy of custom vimrc to dev dir failed"
-                sudo chown mailcontrol:mailcontrol ${d}/.vimrc.custom || error_exit "Chown failed for custom vimrc"
+                sudo cp "${VIMRC}" ${d} || die "Copy of custom vimrc to dev dir failed"
+                sudo chown "${MUSE_MASTER}":"${MUSE_MASTER}" ${d}/.vimrc.custom || die "Chown failed for custom vimrc"
             done
         fi
         ## /tmp for muse -vif
-        sudo cp "${VIMRC}" /tmp || error_exit "Copy of custom vimrc to tmp failed"
-        sudo chown mailcontrol:mailcontrol /tmp/.vimrc.custom || error_exit "Chown failed for tmp custom vimrc"
+        sudo cp "${VIMRC}" /tmp || die "Copy of custom vimrc to tmp failed"
+        sudo chown "${MUSE_MASTER}":"${MUSE_MASTER}" /tmp/.vimrc.custom || die "Chown failed for tmp custom vimrc"
     fi
 
     ## The vim templates
     if [[ -f "${VIMFILES}" ]] 
     then
-        cd ~mailcontrol || error_exit "CD failed to ~mailcontrol"
-        sudo cp "${VIMFILES}" ~mailcontrol/vimfiles.tar || error_exit "Failed to copy vim tar file"
-        sudo tar xvf ~mailcontrol/vimfiles.tar || error_exit "Untar for .vimfiles failed"
-        sudo chown mailcontrol:mailcontrol ~mailcontrol/.vim_files || error_exit "chown failed for vim files"
-        sudo rm -f ~mailcontrol/vimfiles.tar 
+		sudo su - "${MUSE_MASTER}" <<-EOF
+            cd "${MASTER_HOME}" || die "CD failed to "${MASTER_HOME}""
+            cp "${VIMFILES}" "${MASTER_HOME}"/vimfiles.tar || die "Failed to copy vim tar file"
+            tar xvf "${MASTER_HOME}"/vimfiles.tar || die "Untar for .vimfiles failed"
+            chown "${MUSE_MASTER}":"${MUSE_MASTER}" "${MASTER_HOME}"/.vim_files || die "chown failed for vim files"
+            rm -f "${MASTER_HOME}"/vimfiles.tar
+		EOF
     fi
 
     ## Point vimrc to our custom file
-    if [[ ! -f ~mailcontrol/.vimrc ]]
+    if [[ ! -f "${MASTER_HOME}"/.vimrc ]]
     then
-        sudo cp "/usr/local/bin/muse_root/resources/vim/.vimrc" ~mailcontrol || error_exit "Copy failed for .vimrc"
+        sudo cp "/usr/local/bin/muse_root/resources/vim/.vimrc" "${MASTER_HOME}" || die "Copy failed for .vimrc"
+        sudo chown "${MUSE_MASTER}":"${MUSE_MASTER}" "${MASTER_HOME}/.vimrc" || die "chown failed for (${MASTER_HOME}/.vimrc)"
     fi
 
-    if [[ -z $(grep "if filereadable" ~mailcontrol/.vimrc) ]]
+    if [[ -z $(sudo grep "if filereadable" "${MASTER_HOME}"/.vimrc) ]]
     then
-        sudo chmod a+w .vimrc || error_exit "chmod failed for .vimrc"
-        sudo cat "/usr/local/bin/muse_root/resources/vim/.vimrc" >> .vimrc || error_exit "Failed to overwrite .vimrc"
+        sudo chmod a+w .vimrc || die "chmod failed for .vimrc"
+        sudo cat "/usr/local/bin/muse_root/resources/vim/.vimrc" >> .vimrc || die "Failed to overwrite .vimrc"
     fi
 
     #======================================
     # musemsg home dir + ssh
     #======================================
-    sudo mkdir -p /home/museslave/.ssh || error_exit "Failed to mkdir /home/museslave/.ssh"
-    sudo chmod 700 /home/museslave/.ssh || error_exit "chmod failed for /home/museslave/.ssh"
-    sudo chown museslave:mailcontrol /home/museslave/.ssh || error_exit "Chown failed for .ssh"
-    sudo cp /usr/local/bin/muse_root/user/musemsg.key /home/museslave/.ssh || error_exit "copy failed for musemsg private key"
-    sudo chmod 600 /home/museslave/.ssh/musemsg.key || error_exit "chmod failed for musemsg private key"
-    sudo chown museslave:mailcontrol /home/museslave/.ssh/musemsg.key || error_exit "chmod failed for musemsg key"
+    sudo mkdir -p /home/museslave/.ssh || die "Failed to mkdir /home/museslave/.ssh"
+    sudo chmod 700 /home/museslave/.ssh || die "chmod failed for /home/museslave/.ssh"
+    sudo chown museslave:"${MUSE_MASTER}" /home/museslave/.ssh || die "Chown failed for .ssh"
+    sudo cp /usr/local/bin/muse_root/user/musemsg.key /home/museslave/.ssh || die "copy failed for musemsg private key"
+    sudo chmod 600 /home/museslave/.ssh/musemsg.key || die "chmod failed for musemsg private key"
+    sudo chown museslave:"${MUSE_MASTER}" /home/museslave/.ssh/musemsg.key || die "chmod failed for musemsg key"
 
     #======================================
     # Runtime directories etc
     #======================================
-    sudo mkdir -p /var/tmp/muse/m_system || error_exit "Failed to create m_system"
-    sudo chown mailcontrol:mailcontrol /var/tmp/muse/m_system || error_exit "chown m_system failed"
-    sudo chmod a+w /var/tmp/muse/m_system || error_exit "chmod m_system failed"
+    sudo mkdir -p /var/tmp/muse/m_system || die "Failed to create m_system"
+    sudo chown "${MUSE_MASTER}":"${MUSE_MASTER}" /var/tmp/muse/m_system || die "chown m_system failed"
+    sudo chmod a+w /var/tmp/muse/m_system || die "chmod m_system failed"
     
-    sudo mkdir -p /var/tmp/muse/run || error_exit "Failed to create run dir"
-    sudo chown mailcontrol:mailcontrol /var/tmp/muse/run || error_exit "chown for run dir failed"
-    sudo chmod a+w /var/tmp/muse/run || error_exit "chmod for run dir failed"
+    sudo mkdir -p /var/tmp/muse/run || die "Failed to create run dir"
+    sudo chown "${MUSE_MASTER}":"${MUSE_MASTER}" /var/tmp/muse/run || die "chown for run dir failed"
+    sudo chmod a+w /var/tmp/muse/run || die "chmod for run dir failed"
 
-    sudo mkdir -p /var/log/muse || error_exit "Failed to create log dir"
-    sudo chown mailcontrol:mailcontrol /var/log/muse || error_exit "chown for log dir failed"
-    sudo chmod a+w /var/log/muse || error_exit "chmod for log dir failed"
+    sudo mkdir -p /var/log/muse || die "Failed to create log dir"
+    sudo chown "${MUSE_MASTER}":"${MUSE_MASTER}" /var/log/muse || die "chown for log dir failed"
+    sudo chmod a+w /var/log/muse || die "chmod for log dir failed"
 
 else
-    error_exit "muse.tar not found in current directory"
+    die "muse.tar not found in current directory"
 fi
-
 
 
