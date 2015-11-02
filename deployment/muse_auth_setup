@@ -1,0 +1,209 @@
+##############################################################
+##
+## Name         :   muse_setup
+## Author       :   Bradley Atkins
+## Description  :   Create the users and sudo permissions
+##                  required to install and run MUSE. Also
+##                  configure ssh config. Must run on each node
+##                  as root.
+## Date         :   28/10/2015
+## Status       :   Reviewed    [n]
+##                  Tested      [n]
+##                  Released    [n]
+##############################################################
+
+die()
+{
+    echo "ERROR: ${1}"
+    exit 1
+}
+#======================================
+# Add sudo rights for sysadmin group
+#======================================
+if ! grep "%sysadmin ALL=(ALL) NOPASSWD:ALL" /etc/sudoers >/dev/null 2>&1
+then
+    cp /etc/sudoers /etc/sudoers.bac || die "Failed to back up /etc/sudoers"
+
+    if ! grep "%sysadmin ALL=(ALL) ALL" /etc/sudoers >/dev/null 2>&1
+    then
+        echo "%sysadmin ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers || 
+            die "Failed to add sysadmin to sudoers"
+    else
+        sed -i 's/sysadmin ALL=(ALL) ALL/sysadmin ALL=(ALL) NOPASSWD:ALL/' /etc/sudoers ||
+            die "Failed to modify /etc/sudoers for sysadmin group"
+    fi
+fi
+#======================================
+# Create the MUSE groups
+#======================================
+for GRP in sysadmin musedev museadmin museusr
+do
+    if ! cat /etc/group | grep "${GRP}" >/dev/null 2>&1
+    then
+        groupadd "${GRP}" || die "failed to create group (${GRP})"
+    fi
+done
+
+#======================================
+# User musemaster
+#======================================
+USR="musemaster"
+KEY="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDSKqwvhbzYGbQo6d4imM25UE1y3nCh/OrO0Iq2NGQKYIYlGNsj++Nzr9h4wPDhfQePk7gIVs4t10WNON9hxWQH0lSUsMrjyorF8JdJdemiLnmO/wGePeKQleJc4uaBSVrLJzSbxhQl6MVRwmmHL0gXqX/CnOe1KCauveZ5tGE+kaFirsZoa56I95/AiYrjab0BASM2AoPHVcz4kbflE4VVLpgPQ5nkgLZi101lGcW0KfxHOr/h5siZY7CJKqAo0aCbDK8MtW/SNE1jt7QMrYGYqWrAqG67y/g3ZGTgH3YEt18Q0/s23ZnLPdfMNqoPG9231lCcyRnvkadagEIwaZNT batkins@al-car-06179.local"
+
+#======================================
+# re/create user 
+#======================================
+if id ${USR} >/dev/null 2>&1
+then
+    userdel -r ${USR} || die "Failed to delete user (${USR})"
+fi
+useradd -c "MUSE master user" -m -G musedev,museadmin ${USR} || die 1 "Failed to create user ${USR}"
+
+MDHOME=$(eval echo ~${USR})
+[[ -d ${MDHOME} ]] || die "useradd failed to create home dir for ${USR}"
+[[ -d ${MDHOME}/.ssh ]] || mkdir ${MDHOME}/.ssh || 
+    die "Useradd cmd failed to create ssh dir for ${USR}" 
+chown "${USR}":"${USR}" "${MDHOME}/.ssh"
+
+#======================================
+# Do we need to add key for user
+#======================================
+if ! grep "${KEY}" ${MDHOME}/.ssh/authorized_keys >/dev/null 2>&1
+then
+    ## Add user to authorized_keys
+    echo "${KEY}" >> ${MDHOME}/.ssh/authorized_keys || 
+        die "Failed to set authorized key for ${USR}"
+fi
+#======================================
+# Set permissions for authorized_keys
+#======================================
+chmod 600 ${MDHOME}/.ssh/authorized_keys || 
+    die "Failed to set permissions for authorized keys for ${USR}"
+chown ${USR}:${USR} ${MDHOME}/.ssh/authorized_keys || 
+    die "Failed to set ownership of ${MDHOME}/.ssh/authorized_keys"
+
+
+#======================================
+# User musedeploy
+#======================================
+USR="musedeploy"
+#======================================
+# re/create user 
+#======================================
+if id ${USR} >/dev/null 2>&1
+then
+    userdel -r ${USR} || die "Failed to delete user (${USR})"
+fi
+useradd -c "MUSE deployment user" -m -G sysadmin ${USR} || die 1 "Failed to create user ${USR}"
+
+MDHOME=$(eval echo ~${USR})
+[[ -d ${MDHOME} ]] || die "useradd failed to create home dir for ${USR}"
+[[ -d ${MDHOME}/.ssh ]] || mkdir ${MDHOME}/.ssh || 
+    die "Useradd cmd failed to create ssh dir for ${USR}" 
+#======================================
+# Do we need to add key for user
+#======================================
+if ! grep "${KEY}" ${MDHOME}/.ssh/authorized_keys >/dev/null 2>&1
+then
+    ## Add user to authorized_keys
+    echo "${KEY}" >> ${MDHOME}/.ssh/authorized_keys || 
+        die "Failed to set authorized key for ${USR}"
+fi
+#======================================
+# Set permissions for authorized_keys
+#======================================
+chmod 600 ${MDHOME}/.ssh/authorized_keys || 
+    die "Failed to set permissions for authorized keys for ${USR}"
+chown ${USR}:${USR} ${MDHOME}/.ssh/authorized_keys || 
+    die "Failed to set ownership of ${MDHOME}/.ssh/authorized_keys"
+
+
+#======================================
+# User museslave
+#======================================
+USR="museslave"
+CMDKEY='command="nohup /usr/local/bin/muse_root/slave/system/slave ${SSH_ORIGINAL_COMMAND} /dev/null 2>&1 </dev/null &",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty '"${KEY}"
+
+#======================================
+# re/create user 
+#======================================
+if id ${USR} >/dev/null 2>&1
+then
+    userdel -r ${USR} || die "Failed to delete user (${USR})"
+fi
+useradd -c "MUSE slave user" -m -G sysadmin ${USR} || die 1 "Failed to create user ${USR}"
+
+MDHOME=$(eval echo ~${USR})
+[[ -d ${MDHOME} ]] || die "useradd failed to create home dir for ${USR}"
+[[ -d ${MDHOME}/.ssh ]] || mkdir ${MDHOME}/.ssh || 
+    die "Useradd cmd failed to create ssh dir for ${USR}" 
+#======================================
+# Do we need to add key for user
+#======================================
+if ! grep "${CMDKEY}" ${MDHOME}/.ssh/authorized_keys >/dev/null 2>&1
+then
+    ## Add user to authorized_keys
+    echo "${CMDKEY}" >> ${MDHOME}/.ssh/authorized_keys || 
+        die "Failed to set authorized key for ${USR}"
+fi
+#======================================
+# Set permissions for authorized_keys
+#======================================
+chmod 600 ${MDHOME}/.ssh/authorized_keys || 
+    die "Failed to set permissions for authorized keys for ${USR}"
+chown ${USR}:${USR} ${MDHOME}/.ssh/authorized_keys || 
+    die "Failed to set ownership of ${MDHOME}/.ssh/authorized_keys"
+
+
+#======================================
+# User musemsg
+#======================================
+USR="musemsg"
+KEY='command="cat >> ${SSH_ORIGINAL_COMMAND}",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty '"${CMDKEY}"
+
+#======================================
+# re/create user 
+#======================================
+if id ${USR} >/dev/null 2>&1
+then
+    userdel -r ${USR} || die "Failed to delete user (${USR})"
+fi
+useradd -c "MUSE messaging service user" -m ${USR} || die 1 "Failed to create user ${USR}"
+
+MDHOME=$(eval echo ~${USR})
+[[ -d ${MDHOME} ]] || die "useradd failed to create home dir for ${USR}"
+[[ -d ${MDHOME}/.ssh ]] || mkdir ${MDHOME}/.ssh || 
+    die "Useradd cmd failed to create ssh dir for ${USR}" 
+#======================================
+# Do we need to add key for user
+#======================================
+if ! grep "${CMDKEY}" ${MDHOME}/.ssh/authorized_keys >/dev/null 2>&1
+then
+    ## Add user to authorized_keys
+    echo "${CMDKEY}" >> ${MDHOME}/.ssh/authorized_keys || 
+        die "Failed to set authorized key for ${USR}"
+fi
+#======================================
+# Set permissions for authorized_keys
+#======================================
+chmod 600 ${MDHOME}/.ssh/authorized_keys || 
+    die "Failed to set permissions for authorized keys for ${USR}"
+chown ${USR}:${USR} ${MDHOME}/.ssh/authorized_keys || 
+    die "Failed to set ownership of ${MDHOME}/.ssh/authorized_keys"
+
+#======================================
+# Set the ssh config 
+#======================================
+[[ -r /etc/ssh/ssh_config ]] || die "Failed to find ssh_config file"
+if grep "ForwardAgent" /etc/ssh/ssh_config >/dev/null 2>&1
+then
+    sed -i 's/.*ForwardAgent.*/ForwardAgent yes/' /etc/ssh/ssh_config || die "Failed to set agent forwarding"
+else
+    echo "ForwardAgent yes" >> /etc/ssh/ssh_config
+fi
+if grep "ServerAliveInterval" /etc/ssh/ssh_config >/dev/null 2>&1
+then
+    sed -i 's/.*ServerAliveInterval.*/ServerAliveInterval 5/' /etc/ssh/ssh_config || die "Failed to set ssh keepalive"
+else
+    echo "ServerAliveInterval 5" >> /etc/ssh/ssh_config || die "Failed to set ssh keepalive"
+fi
